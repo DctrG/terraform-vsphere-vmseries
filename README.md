@@ -29,9 +29,9 @@ For bootstrap ISO creation, the Terraform runner must have one of these installe
 
 If you do not want Terraform to build the ISO, set `bootstrap.create_iso = false` and either pass `bootstrap.local_iso_path` for upload or pass only `bootstrap.datastore_path` to attach a pre-existing datastore ISO.
 
-## Using with real vSphere
+## vSphere Prerequisites
 
-Prepare these vCenter objects before running `terraform plan`:
+Ensure these vCenter objects are available to the Terraform user:
 
 - A datacenter, compute cluster, ESXi host, and datastore visible to the Terraform user.
 - One VM folder if you set `folder`; the module does not create folders.
@@ -39,7 +39,9 @@ Prepare these vCenter objects before running `terraform plan`:
 - A local OVA path visible to the Terraform runner, or an HTTPS URL in `ova.remote_url`.
 - For bootstrap ISO generation, one supported ISO builder on the Terraform runner.
 
-Use the helper script to inspect the OVA labels:
+## OVA Network Mapping
+
+Inspect the OVA descriptor before setting `network_interfaces`:
 
 ```bash
 scripts/inspect-ova-networks.sh /path/to/PA-VM-ESX.ova
@@ -47,7 +49,7 @@ scripts/inspect-ova-networks.sh /path/to/PA-VM-ESX.ova
 
 Many VM-Series ESXi OVAs expose one OVF network label, such as `VM Network`, and adapters named `Ethernet 1`, `Ethernet 2`, and `Ethernet 3`. Map those adapters in order: management, untrust, then trust, unless your design uses a different interface order.
 
-If your vCenter has duplicate port group names, pass `network_id` instead of `network_name`:
+Use `network_name` for normal port group lookups. If names are ambiguous in vCenter, pass `network_id` instead:
 
 ```hcl
 network_interfaces = [
@@ -68,7 +70,7 @@ provider "vsphere" {
 }
 
 module "vmseries" {
-  source = "github.com/YOUR_ORG/terraform-vsphere-vmseries?ref=v0.1.0"
+  source = "github.com/DctrG/terraform-vsphere-vmseries"
 
   name           = "pa-vmseries-01"
   datacenter     = "DC1"
@@ -106,7 +108,7 @@ module "vmseries" {
 
 ```hcl
 module "vmseries" {
-  source = "github.com/YOUR_ORG/terraform-vsphere-vmseries?ref=v0.1.0"
+  source = "github.com/DctrG/terraform-vsphere-vmseries"
 
   name           = "pa-vmseries-01"
   datacenter     = "DC1"
