@@ -23,7 +23,8 @@ variable "ova_local_path" { type = string }
 variable "network_interfaces" {
   type = list(object({
     ovf_label    = string
-    network_name = string
+    network_name = optional(string)
+    network_id   = optional(string)
     ovf_mapping  = optional(string)
     adapter_type = optional(string, "vmxnet3")
   }))

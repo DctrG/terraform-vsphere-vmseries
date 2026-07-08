@@ -7,9 +7,20 @@ locals {
     tostring(index) => nic
   }
 
+  network_interfaces_by_name = {
+    for index, nic in var.network_interfaces :
+    tostring(index) => nic
+    if nic.network_id == null
+  }
+
+  network_interface_ids = {
+    for index, nic in var.network_interfaces :
+    tostring(index) => nic.network_id != null ? nic.network_id : data.vsphere_network.interface[tostring(index)].id
+  }
+
   ovf_network_map = {
     for ovf_label in distinct([for nic in var.network_interfaces : nic.ovf_label]) :
-    ovf_label => data.vsphere_network.interface[tostring(index([for nic in var.network_interfaces : nic.ovf_label], ovf_label))].id
+    ovf_label => local.network_interface_ids[tostring(index([for nic in var.network_interfaces : nic.ovf_label], ovf_label))]
   }
 
   bootstrap_enabled        = var.bootstrap.enabled

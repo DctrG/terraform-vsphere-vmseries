@@ -68,14 +68,15 @@ variable "network_interfaces" {
   description = <<-EOT
     Ordered VM-Series interface mappings to vSphere port groups.
 
-    ovf_label is the OVF network name used during import. Some VM-Series OVAs expose one shared label such as "VM Network"
-    for every adapter. In that case, repeat ovf_label and set ovf_mapping to the adapter name from the OVF, such as
-    "Ethernet 1", "Ethernet 2", and "Ethernet 3".
+    ovf_label is the OVF network name used during import. Set exactly one of network_name or network_id for each adapter.
+    Some VM-Series OVAs expose one shared label such as "VM Network" for every adapter. In that case, repeat ovf_label
+    and set ovf_mapping to the adapter name from the OVF, such as "Ethernet 1", "Ethernet 2", and "Ethernet 3".
   EOT
 
   type = list(object({
     ovf_label    = string
-    network_name = string
+    network_name = optional(string)
+    network_id   = optional(string)
     ovf_mapping  = optional(string)
     adapter_type = optional(string, "vmxnet3")
   }))
@@ -89,10 +90,28 @@ variable "network_interfaces" {
     condition = alltrue([
       for nic in var.network_interfaces :
       length(trimspace(nic.ovf_label)) > 0 &&
-      length(trimspace(nic.network_name)) > 0 &&
-      (nic.ovf_mapping == null || length(trimspace(nic.ovf_mapping)) > 0)
+      length(trimspace(nic.adapter_type)) > 0 &&
+      (nic.network_name == null ? true : length(trimspace(nic.network_name)) > 0) &&
+      (nic.network_id == null ? true : length(trimspace(nic.network_id)) > 0) &&
+      (nic.ovf_mapping == null ? true : length(trimspace(nic.ovf_mapping)) > 0)
     ])
-    error_message = "network_interfaces entries must include non-empty ovf_label and network_name values; ovf_mapping must be non-empty when set."
+    error_message = "network_interfaces entries must include non-empty ovf_label and adapter_type values; network_name, network_id, and ovf_mapping must be non-empty when set."
+  }
+
+  validation {
+    condition = alltrue([
+      for nic in var.network_interfaces :
+      (nic.network_name == null) != (nic.network_id == null)
+    ])
+    error_message = "Each network_interfaces entry must set exactly one of network_name or network_id."
+  }
+
+  validation {
+    condition = alltrue([
+      for nic in var.network_interfaces :
+      length([for other in var.network_interfaces : other if other.ovf_label == nic.ovf_label]) == 1 || nic.ovf_mapping != null
+    ])
+    error_message = "When an ovf_label is used by more than one adapter, every repeated entry must set ovf_mapping."
   }
 
   validation {
@@ -150,6 +169,24 @@ variable "extra_config" {
   default     = {}
 }
 
+variable "custom_attributes" {
+  description = "vSphere custom attribute key/value pairs to assign to the VM."
+  type        = map(string)
+  default     = {}
+}
+
+variable "tags" {
+  description = "Set of vSphere tag IDs to attach to the VM."
+  type        = set(string)
+  default     = []
+}
+
+variable "storage_policy_id" {
+  description = "Optional VM storage policy ID to apply to the VM."
+  type        = string
+  default     = null
+}
+
 variable "cpu_hot_add_enabled" {
   description = "Enable CPU hot-add."
   type        = bool
@@ -172,6 +209,30 @@ variable "wait_for_guest_net_timeout" {
   description = "Timeout in minutes to wait for guest networking. VM-Series does not normally report this reliably before bootstrap, so the default is 0."
   type        = number
   default     = 0
+}
+
+variable "wait_for_guest_net_routable" {
+  description = "Require guest network routes before considering guest networking ready."
+  type        = bool
+  default     = true
+}
+
+variable "poweron_timeout" {
+  description = "Timeout in seconds to wait for the VM to power on."
+  type        = number
+  default     = 300
+}
+
+variable "shutdown_wait_timeout" {
+  description = "Timeout in minutes to wait for a graceful guest shutdown before powering off."
+  type        = number
+  default     = 3
+}
+
+variable "force_power_off" {
+  description = "Force power off the VM when Terraform needs to destroy or reconfigure it and graceful shutdown is unavailable."
+  type        = bool
+  default     = true
 }
 
 variable "bootstrap" {

@@ -37,3 +37,8 @@ output "ovf_network_map" {
   description = "Resolved OVF network label to vSphere network ID map."
   value       = local.ovf_network_map
 }
+
+output "network_interface_ids" {
+  description = "Ordered map of VM-Series adapter index to resolved vSphere network ID."
+  value       = local.network_interface_ids
+}

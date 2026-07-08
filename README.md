@@ -14,7 +14,7 @@ Panorama / PAN-OS policy, templates, device groups, licensing workflows, and com
 
 ## Status
 
-Initial publishable module skeleton. Validate in your lab before using in production.
+Validated with Terraform tests, a PA-VM-ESX-11.0.0 OVA descriptor, and VMware `vcsim`. Run a real vCenter apply/destroy smoke test before using in production.
 
 ## Requirements
 
@@ -45,6 +45,34 @@ terraform test
 ```
 
 The native Terraform tests use mocked providers, so they do not require a live vCenter or a real VM-Series OVA.
+
+## Using with real vSphere
+
+Prepare these vCenter objects before running `terraform plan`:
+
+- A datacenter, compute cluster, ESXi host, and datastore visible to the Terraform user.
+- One VM folder if you set `folder`; the module does not create folders.
+- Port groups or NSX segments for management and dataplane adapters.
+- A local OVA path visible to the Terraform runner, or an HTTPS URL in `ova.remote_url`.
+- For bootstrap ISO generation, one supported ISO builder on the Terraform runner.
+
+Use the helper script to inspect the OVA labels:
+
+```bash
+scripts/inspect-ova-networks.sh /path/to/PA-VM-ESX-11.0.0.ova
+```
+
+PA-VM-ESX-11.0.0 exposes one OVF network label, `VM Network`, and three adapters named `Ethernet 1`, `Ethernet 2`, and `Ethernet 3`. Map those adapters in order: management, untrust, then trust, unless your design uses a different interface order.
+
+If your vCenter has duplicate port group names, pass `network_id` instead of `network_name`:
+
+```hcl
+network_interfaces = [
+  { ovf_label = "VM Network", ovf_mapping = "Ethernet 1", network_id = "network-123" },
+  { ovf_label = "VM Network", ovf_mapping = "Ethernet 2", network_id = "dvportgroup-456" },
+  { ovf_label = "VM Network", ovf_mapping = "Ethernet 3", network_id = "dvportgroup-789" }
+]
+```
 
 ## Basic OVA deployment
 
@@ -152,6 +180,9 @@ Key inputs are below. See `variables.tf` for the full contract.
 | `datastore_name` | VM datastore | `string` | required |
 | `ova` | OVA source and deployment options | `object` | required |
 | `network_interfaces` | Ordered VM-Series adapter mappings to vSphere port groups | `list(object)` | required |
+| `custom_attributes` | vSphere custom attribute key/value pairs | `map(string)` | `{}` |
+| `tags` | vSphere tag IDs to attach to the VM | `set(string)` | `[]` |
+| `storage_policy_id` | Optional VM storage policy ID | `string` | `null` |
 | `bootstrap` | Bootstrap ISO generation/upload/attach settings | `object` | disabled |
 | `bootstrap_vm_auth_key` | Panorama VM auth key | `string` | `null` |
 | `bootstrap_license_authcodes` | `/license/authcodes` content | `string` | `null` |
@@ -167,6 +198,7 @@ Key inputs are below. See `variables.tf` for the full contract.
 | `management_ip_address` | Static management IP supplied via bootstrap |
 | `bootstrap_iso_datastore_path` | Datastore path for attached bootstrap ISO |
 | `ovf_network_map` | Resolved OVF label to network ID map |
+| `network_interface_ids` | Ordered map of adapter index to resolved network ID |
 
 ## Bootstrap behavior
 

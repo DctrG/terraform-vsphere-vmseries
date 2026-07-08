@@ -119,3 +119,27 @@ run "bootstrap_plan" {
     error_message = "The bootstrap ISO output should expose the configured datastore path."
   }
 }
+
+run "network_ids_plan" {
+  command = plan
+
+  variables {
+    name = "pa-vmseries-network-ids"
+
+    network_interfaces = [
+      { ovf_label = "VM Network", ovf_mapping = "Ethernet 1", network_id = "network-mgmt" },
+      { ovf_label = "VM Network", ovf_mapping = "Ethernet 2", network_id = "network-untrust" },
+      { ovf_label = "VM Network", ovf_mapping = "Ethernet 3", network_id = "network-trust" }
+    ]
+  }
+
+  assert {
+    condition     = output.network_interface_ids["0"] == "network-mgmt"
+    error_message = "The first network interface should use the caller-supplied network ID."
+  }
+
+  assert {
+    condition     = output.ovf_network_map["VM Network"] == "network-mgmt"
+    error_message = "The OVF network map should use the first adapter network for repeated OVF labels."
+  }
+}

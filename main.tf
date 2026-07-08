@@ -14,18 +14,25 @@ resource "vsphere_virtual_machine" "this" {
   scsi_type = data.vsphere_ovf_vm_template.this.scsi_type
 
   annotation             = var.annotation
+  custom_attributes      = var.custom_attributes
   extra_config           = var.extra_config
   cpu_hot_add_enabled    = var.cpu_hot_add_enabled
   memory_hot_add_enabled = var.memory_hot_add_enabled
+  force_power_off        = var.force_power_off
+  poweron_timeout        = var.poweron_timeout
+  shutdown_wait_timeout  = var.shutdown_wait_timeout
+  storage_policy_id      = var.storage_policy_id
+  tags                   = var.tags
 
-  wait_for_guest_ip_timeout  = var.wait_for_guest_ip_timeout
-  wait_for_guest_net_timeout = var.wait_for_guest_net_timeout
+  wait_for_guest_ip_timeout   = var.wait_for_guest_ip_timeout
+  wait_for_guest_net_routable = var.wait_for_guest_net_routable
+  wait_for_guest_net_timeout  = var.wait_for_guest_net_timeout
 
   dynamic "network_interface" {
     for_each = local.network_interfaces_by_index
 
     content {
-      network_id   = data.vsphere_network.interface[network_interface.key].id
+      network_id   = local.network_interface_ids[network_interface.key]
       adapter_type = network_interface.value.adapter_type
       ovf_mapping  = network_interface.value.ovf_mapping
     }

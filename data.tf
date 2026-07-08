@@ -30,7 +30,7 @@ data "vsphere_datastore" "bootstrap" {
 }
 
 data "vsphere_network" "interface" {
-  for_each      = local.network_interfaces_by_index
+  for_each      = local.network_interfaces_by_name
   name          = each.value.network_name
   datacenter_id = data.vsphere_datacenter.this.id
 }
