@@ -12,10 +12,6 @@ This module is intentionally focused on the infrastructure side of a private-clo
 
 Panorama / PAN-OS policy, templates, device groups, licensing workflows, and commit operations should be handled separately with Panorama, the PAN-OS API, Ansible, CI/CD, or the Palo Alto Networks PAN-OS Terraform provider.
 
-## Status
-
-Validated with Terraform tests, a PA-VM-ESX-11.0.0 OVA descriptor, and VMware `vcsim`. Run a real vCenter apply/destroy smoke test before using in production.
-
 ## Requirements
 
 | Name | Version |
@@ -59,10 +55,10 @@ Prepare these vCenter objects before running `terraform plan`:
 Use the helper script to inspect the OVA labels:
 
 ```bash
-scripts/inspect-ova-networks.sh /path/to/PA-VM-ESX-11.0.0.ova
+scripts/inspect-ova-networks.sh /path/to/PA-VM-ESX.ova
 ```
 
-PA-VM-ESX-11.0.0 exposes one OVF network label, `VM Network`, and three adapters named `Ethernet 1`, `Ethernet 2`, and `Ethernet 3`. Map those adapters in order: management, untrust, then trust, unless your design uses a different interface order.
+Many VM-Series ESXi OVAs expose one OVF network label, such as `VM Network`, and adapters named `Ethernet 1`, `Ethernet 2`, and `Ethernet 3`. Map those adapters in order: management, untrust, then trust, unless your design uses a different interface order.
 
 If your vCenter has duplicate port group names, pass `network_id` instead of `network_name`:
 
@@ -94,7 +90,7 @@ module "vmseries" {
   datastore_name = "vsanDatastore"
 
   ova = {
-    local_path = "/opt/images/PA-VM-ESX-11.0.0.ova"
+    local_path = "/opt/images/PA-VM-ESX.ova"
   }
 
   network_interfaces = [
@@ -117,7 +113,7 @@ module "vmseries" {
 }
 ```
 
-> PA-VM-ESX-11.0.0 exposes one OVF network label, `VM Network`, and three adapters named `Ethernet 1`, `Ethernet 2`, and `Ethernet 3`. Other image versions can vary, so inspect the OVA/OVF descriptor if deployment fails with a network mapping error.
+> VM-Series OVA labels can vary by PAN-OS image and build. Inspect the OVA/OVF descriptor if deployment fails with a network mapping error.
 
 ## Panorama bootstrap example
 
@@ -132,7 +128,7 @@ module "vmseries" {
   datastore_name = "vsanDatastore"
 
   ova = {
-    local_path = "/opt/images/PA-VM-ESX-11.0.0.ova"
+    local_path = "/opt/images/PA-VM-ESX.ova"
   }
 
   network_interfaces = [
