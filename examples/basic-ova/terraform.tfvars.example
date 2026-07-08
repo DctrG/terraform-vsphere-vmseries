@@ -1,0 +1,17 @@
+vsphere_server = "vcenter.example.local"
+vsphere_user   = "administrator@vsphere.local"
+vsphere_password = "CHANGE_ME"
+
+name           = "pa-vmseries-01"
+datacenter     = "DC1"
+cluster_name   = "Cluster01"
+host_name      = "esxi-01.example.local"
+datastore_name = "vsanDatastore"
+folder         = "Network/Security"
+ova_local_path = "/opt/images/PA-VM-ESX-11.0.0.ova"
+
+network_interfaces = [
+  { ovf_label = "VM Network", ovf_mapping = "Ethernet 1", network_name = "PG-MGMT" },
+  { ovf_label = "VM Network", ovf_mapping = "Ethernet 2", network_name = "PG-UNTRUST" },
+  { ovf_label = "VM Network", ovf_mapping = "Ethernet 3", network_name = "PG-TRUST" }
+]
