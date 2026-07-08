@@ -29,19 +29,6 @@ For bootstrap ISO creation, the Terraform runner must have one of these installe
 
 If you do not want Terraform to build the ISO, set `bootstrap.create_iso = false` and either pass `bootstrap.local_iso_path` for upload or pass only `bootstrap.datastore_path` to attach a pre-existing datastore ISO.
 
-## Testing
-
-Run these checks before publishing or opening a pull request:
-
-```bash
-terraform fmt -check -recursive
-terraform init -backend=false
-terraform validate
-terraform test
-```
-
-The native Terraform tests use mocked providers, so they do not require a live vCenter or a real VM-Series OVA.
-
 ## Using with real vSphere
 
 Prepare these vCenter objects before running `terraform plan`:
@@ -70,7 +57,7 @@ network_interfaces = [
 ]
 ```
 
-## Basic OVA deployment
+## Basic OVA Deployment
 
 ```hcl
 provider "vsphere" {
@@ -115,7 +102,7 @@ module "vmseries" {
 
 > VM-Series OVA labels can vary by PAN-OS image and build. Inspect the OVA/OVF descriptor if deployment fails with a network mapping error.
 
-## Panorama bootstrap example
+## Panorama Bootstrap
 
 ```hcl
 module "vmseries" {
@@ -223,26 +210,6 @@ This module does not:
 - Register licenses through CSP.
 - Configure NSX-T service insertion.
 - Implement autoscaling.
-
-## Publishing to the Terraform Registry
-
-1. Push this repository to GitHub with the name `terraform-vsphere-vmseries`.
-2. Add a semantic version tag:
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-3. In Terraform Registry, publish the GitHub repository as a module.
-4. The module will appear as:
-
-```hcl
-module "vmseries" {
-  source  = "YOUR_NAMESPACE/vmseries/vsphere"
-  version = "0.1.0"
-}
-```
 
 ## Recommended production pattern
 
