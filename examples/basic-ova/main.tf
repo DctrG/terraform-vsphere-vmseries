@@ -19,12 +19,15 @@ provider "vsphere" {
 module "vmseries" {
   source = "../../"
 
-  name           = var.name
-  datacenter     = var.datacenter
-  cluster_name   = var.cluster_name
-  host_name      = var.host_name
-  datastore_name = var.datastore_name
-  folder         = var.folder
+  name               = var.name
+  datacenter         = var.datacenter
+  cluster_name       = var.cluster_name
+  host_name          = var.host_name
+  host_system_id     = var.host_system_id
+  datastore_name     = var.datastore_name
+  resource_pool_name = var.resource_pool_name
+  resource_pool_id   = var.resource_pool_id
+  folder             = var.folder
 
   ova = {
     local_path = var.ova_local_path

@@ -10,21 +10,66 @@ datastore_name = "vsanDatastore"
 folder         = "Network/Security"
 ova_local_path = "/opt/images/PA-VM-ESX.ova"
 
+# Use host_system_id instead of host_name if your automation already resolves
+# the ESXi managed object ID.
+# host_name      = null
+# host_system_id = "host-123"
+
+# For a standalone ESXi host, omit cluster_name and use a resource pool instead.
+# datacenter         = "ha-datacenter"
+# cluster_name       = null
+# resource_pool_name = "Resources"
+
 network_interfaces = [
   { ovf_label = "VM Network", ovf_mapping = "Ethernet 1", network_name = "PG-MGMT" },
   { ovf_label = "VM Network", ovf_mapping = "Ethernet 2", network_name = "PG-UNTRUST" },
   { ovf_label = "VM Network", ovf_mapping = "Ethernet 3", network_name = "PG-TRUST" }
 ]
 
+mgmt_type            = "static"
 mgmt_ip_address      = "10.10.10.51"
 mgmt_default_gateway = "10.10.10.1"
 mgmt_netmask         = "255.255.255.0"
 dns_primary          = "10.10.10.10"
 dns_secondary        = "10.10.10.11"
 
+# For DHCP management, set mgmt_type and omit the static address fields.
+# mgmt_type            = "dhcp-client"
+# mgmt_ip_address      = null
+# mgmt_default_gateway = null
+# mgmt_netmask         = null
+
 panorama_server = "10.10.20.10"
 template_stack  = "TS-VMWARE"
 device_group    = "DG-VMWARE"
 
-bootstrap_vm_auth_key = "CHANGE_ME"
-bootstrap_license_authcodes = "AUTHCODE1\nAUTHCODE2\n"
+# Use the Panorama VM auth key generated for device registration.
+# This is rendered as vm-auth-key and is required for Panorama onboarding.
+bootstrap_vm_auth_key                = "CHANGE_ME"
+bootstrap_plugin_op_commands         = "panorama-licensing-mode-on"
+bootstrap_registration_pin_id        = "CHANGE_ME"
+bootstrap_registration_pin_value     = "CHANGE_ME"
+bootstrap_license_authcodes          = "AUTHCODE1\nAUTHCODE2\n"
+
+# Optional: only set this if your Panorama plugin bootstrap workflow explicitly
+# provides/requires an auth-key parameter. This is not a replacement for
+# bootstrap_vm_auth_key.
+# bootstrap_auth_key = "CHANGE_ME"
+
+# VM-Series OVAs that expose guestinfo.pa_vm.* OVF properties can receive
+# bootstrap values through vApp properties in addition to the bootstrap ISO.
+# bootstrap_vapp_properties_enabled = true
+# bootstrap_vapp_options            = null
+# vapp_properties = {
+#   "guestinfo.pa_vm.options" = "CHANGE_ME"
+# }
+
+# Optional: include additional files in the generated bootstrap ISO.
+# bootstrap_files = {
+#   "content/README.txt" = {
+#     content = "Place PAN-OS content files under content/ when required.\n"
+#   }
+#   "plugins/plugin-package.tgz" = {
+#     source = "/secure/artifacts/plugin-package.tgz"
+#   }
+# }

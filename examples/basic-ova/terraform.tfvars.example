@@ -10,6 +10,16 @@ datastore_name = "vsanDatastore"
 folder         = "Network/Security"
 ova_local_path = "/opt/images/PA-VM-ESX.ova"
 
+# Use host_system_id instead of host_name if your automation already resolves
+# the ESXi managed object ID.
+# host_name      = null
+# host_system_id = "host-123"
+
+# For a standalone ESXi host, omit cluster_name and use a resource pool instead.
+# datacenter         = "ha-datacenter"
+# cluster_name       = null
+# resource_pool_name = "Resources"
+
 network_interfaces = [
   { ovf_label = "VM Network", ovf_mapping = "Ethernet 1", network_name = "PG-MGMT" },
   { ovf_label = "VM Network", ovf_mapping = "Ethernet 2", network_name = "PG-UNTRUST" },

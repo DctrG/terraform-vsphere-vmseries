@@ -1,5 +1,5 @@
 variable "name" {
-  description = "Name of the VM-Series virtual machine in vCenter."
+  description = "Name of the VM-Series virtual machine in vSphere."
   type        = string
 
   validation {
@@ -14,13 +14,36 @@ variable "datacenter" {
 }
 
 variable "cluster_name" {
-  description = "vSphere compute cluster name. Used to resolve the default resource pool."
+  description = "Optional vSphere compute cluster name. Used to resolve the cluster root resource pool for vCenter deployments."
   type        = string
+  default     = null
+
+  validation {
+    condition     = try(length(trimspace(var.cluster_name)) > 0, true)
+    error_message = "cluster_name must not be empty when set."
+  }
 }
 
 variable "host_name" {
-  description = "ESXi host name to target for OVF/OVA deployment. OVA deployment requires direct host selection."
+  description = "Optional ESXi host name to target for placement. OVA deployment requires host_name or host_system_id."
   type        = string
+  default     = null
+
+  validation {
+    condition     = try(length(trimspace(var.host_name)) > 0, true)
+    error_message = "host_name must not be empty when set."
+  }
+}
+
+variable "host_system_id" {
+  description = "Optional ESXi host managed object ID. Takes precedence over host_name and avoids a host name lookup."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = try(length(trimspace(var.host_system_id)) > 0, true)
+    error_message = "host_system_id must not be empty when set."
+  }
 }
 
 variable "datastore_name" {
@@ -29,9 +52,25 @@ variable "datastore_name" {
 }
 
 variable "resource_pool_name" {
-  description = "Optional resource pool name. If null, the cluster root resource pool is used."
+  description = "Optional resource pool name or inventory path. If null, the cluster root resource pool is used when cluster_name is set."
   type        = string
   default     = null
+
+  validation {
+    condition     = try(length(trimspace(var.resource_pool_name)) > 0, true)
+    error_message = "resource_pool_name must not be empty when set."
+  }
+}
+
+variable "resource_pool_id" {
+  description = "Optional resource pool managed object ID. Takes precedence over resource_pool_name and cluster_name."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = try(length(trimspace(var.resource_pool_id)) > 0, true)
+    error_message = "resource_pool_id must not be empty when set."
+  }
 }
 
 variable "folder" {
@@ -42,25 +81,65 @@ variable "folder" {
 
 variable "ova" {
   description = <<-EOT
-    VM-Series OVA source and OVF deployment options. Set exactly one of local_path or remote_url.
+    VM-Series image source and deployment options. Set exactly one of local_path, remote_url, source_image_name, or source_image_uuid.
+    Use local_path or remote_url to import an OVF/OVA. Use source_image_name or source_image_uuid to clone an already-imported
+    vSphere golden image VM/template and avoid uploading/importing the OVA again.
   EOT
 
   type = object({
-    local_path                = optional(string)
-    remote_url                = optional(string)
-    allow_unverified_ssl_cert = optional(bool, false)
-    deployment_option         = optional(string)
-    ip_protocol               = optional(string, "IPV4")
-    ip_allocation_policy      = optional(string, "STATIC_MANUAL")
-    enable_hidden_properties  = optional(bool, false)
+    local_path                              = optional(string)
+    remote_url                              = optional(string)
+    source_image_name                       = optional(string)
+    source_image_uuid                       = optional(string)
+    source_image_folder                     = optional(string)
+    source_image_linked_clone               = optional(bool, false)
+    source_image_clone_timeout              = optional(number)
+    source_image_scsi_controller_scan_count = optional(number, 1)
+    source_image_nvme_controller_scan_count = optional(number, 1)
+    allow_unverified_ssl_cert               = optional(bool, false)
+    deployment_option                       = optional(string)
+    ip_protocol                             = optional(string, "IPV4")
+    ip_allocation_policy                    = optional(string, "STATIC_MANUAL")
+    enable_hidden_properties                = optional(bool, false)
   })
 
   validation {
+    condition = length([
+      for source in [
+        try(var.ova.local_path, null),
+        try(var.ova.remote_url, null),
+        try(var.ova.source_image_name, null),
+        try(var.ova.source_image_uuid, null)
+      ] : source
+      if source != null
+    ]) == 1
+    error_message = "Set exactly one of ova.local_path, ova.remote_url, ova.source_image_name, or ova.source_image_uuid."
+  }
+
+  validation {
+    condition = alltrue([
+      for source in [
+        try(var.ova.local_path, null),
+        try(var.ova.remote_url, null),
+        try(var.ova.source_image_name, null),
+        try(var.ova.source_image_uuid, null),
+        try(var.ova.source_image_folder, null)
+      ] : source == null ? true : length(trimspace(source)) > 0
+    ])
+    error_message = "OVA source path, URL, source image name, source image UUID, and source image folder values must be non-empty when set."
+  }
+
+  validation {
+    condition     = try(var.ova.source_image_clone_timeout, null) == null ? true : var.ova.source_image_clone_timeout > 0
+    error_message = "ova.source_image_clone_timeout must be greater than 0 when set."
+  }
+
+  validation {
     condition = (
-      (try(var.ova.local_path, null) != null && try(var.ova.remote_url, null) == null) ||
-      (try(var.ova.local_path, null) == null && try(var.ova.remote_url, null) != null)
+      try(var.ova.source_image_scsi_controller_scan_count, 1) >= 1 &&
+      try(var.ova.source_image_nvme_controller_scan_count, 1) >= 1
     )
-    error_message = "Set exactly one of ova.local_path or ova.remote_url."
+    error_message = "source image controller scan counts must be greater than or equal to 1."
   }
 }
 
@@ -169,6 +248,13 @@ variable "extra_config" {
   default     = {}
 }
 
+variable "vapp_properties" {
+  description = "Additional vApp/OVF property values to set on the VM. Use this for image-specific guestinfo properties not modeled by bootstrap settings."
+  type        = map(string)
+  default     = {}
+  sensitive   = true
+}
+
 variable "custom_attributes" {
   description = "vSphere custom attribute key/value pairs to assign to the VM."
   type        = map(string)
@@ -237,19 +323,21 @@ variable "force_power_off" {
 
 variable "bootstrap" {
   description = <<-EOT
-    Optional VM-Series bootstrap ISO generation, upload, and CD-ROM attachment settings.
+    Optional VM-Series bootstrap generation and attachment settings.
 
     Modes:
-    - enabled=false: no bootstrap CD-ROM is attached.
+    - enabled=false: no bootstrap settings are applied.
     - enabled=true, create_iso=true: module renders init-cfg.txt, optionally authcodes/bootstrap.xml, builds an ISO locally, uploads it with vsphere_file, and attaches it.
     - enabled=true, create_iso=false, local_iso_path set: module uploads the supplied local ISO and attaches it.
     - enabled=true, create_iso=false, local_iso_path null: module assumes datastore_path already exists and attaches it.
+    - enabled=true, vapp_properties_enabled=true: module also renders native VM-Series guestinfo.pa_vm.* vApp properties for OVF images that support them.
   EOT
 
   type = object({
     enabled                     = optional(bool, false)
     create_iso                  = optional(bool, true)
     attach_iso                  = optional(bool, true)
+    vapp_properties_enabled     = optional(bool, false)
     work_dir                    = optional(string)
     local_iso_path              = optional(string)
     datastore_name              = optional(string)
@@ -308,25 +396,85 @@ variable "bootstrap" {
   }
 }
 
+variable "bootstrap_vapp_options" {
+  description = "Optional value for the native guestinfo.pa_vm.options vApp property when bootstrap.vapp_properties_enabled is true."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
 variable "bootstrap_vm_auth_key" {
-  description = "Optional Panorama VM auth key to include in /config/init-cfg.txt."
+  description = "Optional Panorama VM auth key rendered as vm-auth-key for Panorama registration in the bootstrap ISO and native vApp properties when enabled."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "bootstrap_auth_key" {
+  description = "Optional plugin bootstrap value rendered as auth-key in /config/init-cfg.txt when ISO bootstrap is enabled. This is not a replacement for bootstrap_vm_auth_key."
   type        = string
   default     = null
   sensitive   = true
 }
 
 variable "bootstrap_registration_pin_value" {
-  description = "Optional VM-Series auto-registration PIN value to include in /config/init-cfg.txt."
+  description = "Optional VM-Series auto-registration PIN value to include in the bootstrap ISO and native vApp properties when enabled."
   type        = string
   default     = null
   sensitive   = true
 }
 
 variable "bootstrap_license_authcodes" {
-  description = "Optional content for /license/authcodes. Put one or more VM-Series auth codes as expected by PAN-OS."
+  description = "Optional VM-Series auth codes. With ISO bootstrap, this is rendered to /license/authcodes. With vApp bootstrap, it is rendered to guestinfo.pa_vm.authcodes."
   type        = string
   default     = null
   sensitive   = true
+}
+
+variable "bootstrap_files" {
+  description = <<-EOT
+    Additional files to include in the generated bootstrap ISO, keyed by path relative to the bootstrap root.
+    Paths must be under config/, license/, content/, software/, or plugins/. For each file, set exactly one of
+    content, content_base64, or source.
+  EOT
+
+  type = map(object({
+    content         = optional(string)
+    content_base64  = optional(string)
+    source          = optional(string)
+    file_permission = optional(string, "0600")
+  }))
+
+  default   = {}
+  sensitive = true
+
+  validation {
+    condition = alltrue([
+      for path in keys(nonsensitive(var.bootstrap_files)) :
+      can(regex("^(config|license|content|software|plugins)/.+[^/]$", path)) &&
+      !can(regex("(^|/)\\.\\.?(/|$)", path))
+    ])
+    error_message = "bootstrap_files keys must be relative file paths under config/, license/, content/, software/, or plugins/ and must not contain . or .. path segments."
+  }
+
+  validation {
+    condition = alltrue([
+      for file in values(var.bootstrap_files) :
+      length([
+        for value in [file.content, file.content_base64, file.source] : value
+        if value != null
+      ]) == 1
+    ])
+    error_message = "Each bootstrap_files entry must set exactly one of content, content_base64, or source."
+  }
+
+  validation {
+    condition = alltrue([
+      for file in values(var.bootstrap_files) :
+      file.file_permission == null ? true : can(regex("^[0-7]{3,4}$", file.file_permission))
+    ])
+    error_message = "bootstrap_files.file_permission values must use 3 or 4 digit octal notation, such as 600 or 0600."
+  }
 }
 
 variable "bootstrap_xml" {

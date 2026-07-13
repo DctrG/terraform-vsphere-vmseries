@@ -1,6 +1,42 @@
 locals {
-  resource_pool_id = var.resource_pool_name == null ? data.vsphere_compute_cluster.this.resource_pool_id : data.vsphere_resource_pool.this[0].id
-  host_system_id   = data.vsphere_host.this.id
+  deploy_from_source_image = var.ova.source_image_name != null || var.ova.source_image_uuid != null
+  deploy_from_ova          = !local.deploy_from_source_image
+
+  image_num_cpus = try(coalesce(
+    try(data.vsphere_virtual_machine.source_image[0].num_cpus, null),
+    try(data.vsphere_ovf_vm_template.this[0].num_cpus, null),
+    2
+  ), 2)
+  image_memory = try(coalesce(
+    try(data.vsphere_virtual_machine.source_image[0].memory, null),
+    try(data.vsphere_ovf_vm_template.this[0].memory, null),
+    5632
+  ), 5632)
+  image_guest_id = try(coalesce(
+    try(data.vsphere_virtual_machine.source_image[0].guest_id, null),
+    try(data.vsphere_ovf_vm_template.this[0].guest_id, null),
+    "otherLinux64Guest"
+  ), "otherLinux64Guest")
+  image_firmware = try(coalesce(
+    try(data.vsphere_virtual_machine.source_image[0].firmware, null),
+    try(data.vsphere_ovf_vm_template.this[0].firmware, null)
+  ), "")
+  image_scsi_type = try(coalesce(
+    try(data.vsphere_virtual_machine.source_image[0].scsi_type, null),
+    try(data.vsphere_ovf_vm_template.this[0].scsi_type, null),
+    "lsilogic"
+  ), "lsilogic")
+  source_image_disks = try(data.vsphere_virtual_machine.source_image[0].disks, [])
+
+  resource_pool_id = try(coalesce(
+    var.resource_pool_id,
+    try(data.vsphere_resource_pool.this[0].id, null),
+    try(data.vsphere_compute_cluster.this[0].resource_pool_id, null)
+  ), null)
+  host_system_id = try(coalesce(
+    var.host_system_id,
+    try(data.vsphere_host.this[0].id, null)
+  ), null)
 
   network_interfaces_by_index = {
     for index, nic in var.network_interfaces :
@@ -26,12 +62,22 @@ locals {
   bootstrap_enabled        = var.bootstrap.enabled
   bootstrap_create_iso     = local.bootstrap_enabled && var.bootstrap.create_iso
   bootstrap_attach_iso     = local.bootstrap_enabled && var.bootstrap.attach_iso
+  bootstrap_vapp_enabled   = local.bootstrap_enabled && var.bootstrap.vapp_properties_enabled
   bootstrap_datastore_name = coalesce(var.bootstrap.datastore_name, var.datastore_name)
   bootstrap_datastore_path = coalesce(var.bootstrap.datastore_path, "vmseries-bootstrap/${var.name}/bootstrap.iso")
   bootstrap_dir            = coalesce(var.bootstrap.work_dir, "${path.root}/.terraform/vmseries-bootstrap/${var.name}")
   bootstrap_iso_local_path = coalesce(var.bootstrap.local_iso_path, "${local.bootstrap_dir}/bootstrap.iso")
   bootstrap_upload_iso     = local.bootstrap_attach_iso && (local.bootstrap_create_iso || var.bootstrap.local_iso_path != null)
   bootstrap_management_ip  = var.bootstrap.management_type == "static" ? var.bootstrap.ip_address : null
+  bootstrap_file_paths     = sort(keys(nonsensitive(var.bootstrap_files)))
+  bootstrap_files_fingerprint = nonsensitive(sha256(jsonencode({
+    for path in local.bootstrap_file_paths : path => {
+      content_sha256        = var.bootstrap_files[path].content == null ? null : sha256(var.bootstrap_files[path].content)
+      content_base64_sha256 = var.bootstrap_files[path].content_base64 == null ? null : sha256(var.bootstrap_files[path].content_base64)
+      source_sha256         = var.bootstrap_files[path].source == null ? null : filesha256(nonsensitive(var.bootstrap_files[path].source))
+      file_permission       = var.bootstrap_files[path].file_permission
+    }
+  })))
 
   init_cfg_ordered_lines = compact([
     "type=${var.bootstrap.management_type}",
@@ -56,6 +102,7 @@ locals {
     var.bootstrap.dhcp_accept_server_domain != null ? "dhcp-accept-server-domain=${var.bootstrap.dhcp_accept_server_domain}" : null,
     var.bootstrap.registration_pin_id != null ? "vm-series-auto-registration-pin-id=${var.bootstrap.registration_pin_id}" : null,
     var.bootstrap_registration_pin_value != null ? "vm-series-auto-registration-pin-value=${var.bootstrap_registration_pin_value}" : null,
+    var.bootstrap_auth_key != null ? "auth-key=${var.bootstrap_auth_key}" : null,
     var.bootstrap_vm_auth_key != null ? "vm-auth-key=${var.bootstrap_vm_auth_key}" : null
   ])
 
@@ -66,4 +113,34 @@ locals {
   ]
 
   init_cfg_content = "${join("\n", concat(local.init_cfg_ordered_lines, local.init_cfg_additional_lines))}\n"
+
+  bootstrap_vapp_raw_properties = local.bootstrap_vapp_enabled ? {
+    "guestinfo.pa_vm.hostname"                              = var.bootstrap.hostname
+    "guestinfo.pa_vm.type"                                  = var.bootstrap.management_type
+    "guestinfo.pa_vm.ip-address"                            = var.bootstrap.ip_address
+    "guestinfo.pa_vm.netmask"                               = var.bootstrap.netmask
+    "guestinfo.pa_vm.default-gateway"                       = var.bootstrap.default_gateway
+    "guestinfo.pa_vm.ipv6-address"                          = var.bootstrap.ipv6_address
+    "guestinfo.pa_vm.ipv6-default-gateway"                  = var.bootstrap.ipv6_default_gateway
+    "guestinfo.pa_vm.dns-primary"                           = var.bootstrap.dns_primary
+    "guestinfo.pa_vm.dns-secondary"                         = var.bootstrap.dns_secondary
+    "guestinfo.pa_vm.panorama-server"                       = var.bootstrap.panorama_server
+    "guestinfo.pa_vm.panorama-server-2"                     = var.bootstrap.panorama_server_2
+    "guestinfo.pa_vm.tplname"                               = var.bootstrap.template_stack
+    "guestinfo.pa_vm.dgname"                                = var.bootstrap.device_group
+    "guestinfo.pa_vm.vm-auth-key"                           = var.bootstrap_vm_auth_key
+    "guestinfo.pa_vm.authcodes"                             = var.bootstrap_license_authcodes
+    "guestinfo.pa_vm.vm-series-auto-registration-pin-id"    = var.bootstrap.registration_pin_id
+    "guestinfo.pa_vm.vm-series-auto-registration-pin-value" = var.bootstrap_registration_pin_value
+    "guestinfo.pa_vm.options"                               = var.bootstrap_vapp_options
+  } : {}
+
+  bootstrap_vapp_properties = {
+    for key, value in local.bootstrap_vapp_raw_properties :
+    key => value
+    if value != null
+  }
+
+  vapp_properties_enabled = local.bootstrap_vapp_enabled || length(nonsensitive(var.vapp_properties)) > 0
+  vapp_properties         = merge(local.bootstrap_vapp_properties, var.vapp_properties)
 }

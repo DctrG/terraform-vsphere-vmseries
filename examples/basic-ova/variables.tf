@@ -11,9 +11,27 @@ variable "vsphere_allow_unverified_ssl" {
 
 variable "name" { type = string }
 variable "datacenter" { type = string }
-variable "cluster_name" { type = string }
-variable "host_name" { type = string }
+variable "cluster_name" {
+  type    = string
+  default = null
+}
+variable "host_name" {
+  type    = string
+  default = null
+}
+variable "host_system_id" {
+  type    = string
+  default = null
+}
 variable "datastore_name" { type = string }
+variable "resource_pool_name" {
+  type    = string
+  default = null
+}
+variable "resource_pool_id" {
+  type    = string
+  default = null
+}
 variable "folder" {
   type    = string
   default = null

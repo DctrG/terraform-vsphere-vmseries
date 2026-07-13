@@ -9,8 +9,18 @@ This module is intentionally focused on the infrastructure side of a private-clo
 - Optionally generate a PAN-OS bootstrap package.
 - Optionally build and upload a bootstrap ISO to a datastore.
 - Optionally attach the bootstrap ISO as a vSphere CD-ROM.
+- Optionally set native VM-Series `guestinfo.pa_vm.*` OVF/vApp bootstrap properties.
 
-Panorama / PAN-OS policy, templates, device groups, licensing workflows, and commit operations should be handled separately with Panorama, the PAN-OS API, Ansible, CI/CD, or the Palo Alto Networks PAN-OS Terraform provider.
+Panorama / PAN-OS policy, templates, device groups, CSP licensing inventory, and commit operations should be handled separately with Panorama, the PAN-OS API, Ansible, CI/CD, or the Palo Alto Networks PAN-OS Terraform provider. This module can pass bootstrap licensing and Panorama registration values to the VM-Series appliance, but it does not manage Panorama or CSP state.
+
+## Supported Patterns
+
+- Import a VM-Series OVA from a local file path or HTTPS URL.
+- Clone from an already-imported VM-Series golden image VM/template.
+- Deploy through vCenter clusters or standalone ESXi inventory.
+- Resolve placement by cluster, resource pool name, resource pool ID, host name, or host managed object ID.
+- Bootstrap with an ISO, native `guestinfo.pa_vm.*` vApp properties, or both.
+- Include additional bootstrap files for content, software, plugin, license, or config artifacts.
 
 ## Requirements
 
@@ -31,13 +41,18 @@ If you do not want Terraform to build the ISO, set `bootstrap.create_iso = false
 
 ## vSphere Prerequisites
 
-Ensure these vCenter objects are available to the Terraform user:
+Ensure these vSphere objects are available to the Terraform user:
 
-- A datacenter, compute cluster, ESXi host, and datastore visible to the Terraform user.
+- A datacenter, datastore, and either a compute cluster, resource pool name, or resource pool ID visible to the Terraform user.
+- For OVA imports, a target ESXi host supplied by `host_name` or `host_system_id`.
 - One VM folder if you set `folder`; the module does not create folders.
 - Port groups or NSX segments for management and dataplane adapters.
-- A local OVA path visible to the Terraform runner, or an HTTPS URL in `ova.remote_url`.
+- A local OVA path visible to the Terraform runner, an HTTPS URL in `ova.remote_url`, or an already-imported golden image VM/template to clone with `ova.source_image_name` or `ova.source_image_uuid`.
 - For bootstrap ISO generation, one supported ISO builder on the Terraform runner.
+
+For standalone ESXi deployments, use the host's local inventory values, such as `datacenter = "ha-datacenter"` and `resource_pool_name = "Resources"`, or pass a discovered `resource_pool_id`.
+
+The OVA virtual hardware family must be supported by the target ESXi/vCenter version. The module does not down-convert OVF descriptors; if vSphere reports an error such as `Unsupported hardware family 'vmx-19'`, use a compatible VM-Series image, import a compatible golden image and clone it with `ova.source_image_name` or `ova.source_image_uuid`, or upgrade the vSphere environment.
 
 ## OVA Network Mapping
 
@@ -70,7 +85,8 @@ provider "vsphere" {
 }
 
 module "vmseries" {
-  source = "github.com/DctrG/terraform-vsphere-vmseries"
+  source  = "DctrG/vmseries/vsphere"
+  version = "~> 0.1"
 
   name           = "pa-vmseries-01"
   datacenter     = "DC1"
@@ -102,13 +118,52 @@ module "vmseries" {
 }
 ```
 
+For a standalone ESXi host, omit `cluster_name` and set `resource_pool_name` or `resource_pool_id`:
+
+```hcl
+datacenter         = "ha-datacenter"
+cluster_name       = null
+host_name          = "localhost.localdomain"
+resource_pool_name = "Resources"
+```
+
 > VM-Series OVA labels can vary by PAN-OS image and build. Inspect the OVA/OVF descriptor if deployment fails with a network mapping error.
+
+## Reusing a Golden Image
+
+For repeated deployments, create a vSphere golden image once by importing the VM-Series OVA and converting the result into the VM or template your team wants to clone. Then point this module at that golden image instead of supplying `ova.local_path` or `ova.remote_url`. Terraform will clone the golden image and skip the OVF/OVA import.
+
+```hcl
+module "vmseries" {
+  source  = "DctrG/vmseries/vsphere"
+  version = "~> 0.1"
+
+  name           = "pa-vmseries-02"
+  datacenter     = "DC1"
+  cluster_name   = "Cluster01"
+  host_name      = "esxi-01.example.local"
+  datastore_name = "vsanDatastore"
+
+  ova = {
+    source_image_name = "templates/PA-VM-Series-Golden"
+  }
+
+  network_interfaces = [
+    { ovf_label = "VM Network", ovf_mapping = "Ethernet 1", network_name = "PG-MGMT" },
+    { ovf_label = "VM Network", ovf_mapping = "Ethernet 2", network_name = "PG-UNTRUST" },
+    { ovf_label = "VM Network", ovf_mapping = "Ethernet 3", network_name = "PG-TRUST" }
+  ]
+}
+```
+
+The golden image must be an existing vSphere VM/template, not only a raw `.ova` file uploaded to a datastore. Use `source_image_name` or `source_image_uuid` for later VMs after the golden image exists.
 
 ## Panorama Bootstrap
 
 ```hcl
 module "vmseries" {
-  source = "github.com/DctrG/terraform-vsphere-vmseries"
+  source  = "DctrG/vmseries/vsphere"
+  version = "~> 0.1"
 
   name           = "pa-vmseries-01"
   datacenter     = "DC1"
@@ -127,10 +182,10 @@ module "vmseries" {
   ]
 
   bootstrap = {
-    enabled         = true
-    create_iso      = true
-    attach_iso      = true
-    datastore_path  = "vmseries-bootstrap/pa-vmseries-01/bootstrap.iso"
+    enabled        = true
+    create_iso     = true
+    attach_iso     = true
+    datastore_path = "vmseries-bootstrap/pa-vmseries-01/bootstrap.iso"
 
     management_type = "static"
     ip_address      = "10.10.10.51"
@@ -144,13 +199,22 @@ module "vmseries" {
     dns_primary     = "10.10.10.10"
     dns_secondary   = "10.10.10.11"
 
-    op_cmd_dpdk_pkt_io = "on"
+    op_cmd_dpdk_pkt_io  = "on"
+    plugin_op_commands  = "panorama-licensing-mode-on"
+    registration_pin_id = var.bootstrap_registration_pin_id
   }
 
-  bootstrap_vm_auth_key     = var.bootstrap_vm_auth_key
-  bootstrap_license_authcodes = var.bootstrap_license_authcodes
+  bootstrap_vm_auth_key            = var.bootstrap_vm_auth_key
+  bootstrap_registration_pin_value = var.bootstrap_registration_pin_value
+  bootstrap_license_authcodes      = var.bootstrap_license_authcodes
 }
 ```
+
+Use the Panorama-generated VM auth key for `bootstrap_vm_auth_key`; VM-Series renders it as `vm-auth-key` and uses it for Panorama registration. This is the key required for automated onboarding into Panorama. Do not replace it with a registration PIN, PIN value, license auth code, or plugin-only auth value.
+
+Some Panorama plugin bootstrap workflows also expose an `auth-key` parameter. If your workflow explicitly requires that value, pass it separately as `bootstrap_auth_key`. Do not use `bootstrap_auth_key` as a substitute for `bootstrap_vm_auth_key`; they render to different `init-cfg.txt` keys and serve different bootstrap paths.
+
+After the firewall auto-registers, Panorama may place the serial number into candidate configuration for the requested device group and template stack. Commit Panorama so the new serial is present in running configuration, then push policy/templates with the workflow your environment uses.
 
 ## Inputs
 
@@ -158,19 +222,27 @@ Key inputs are below. See `variables.tf` for the full contract.
 
 | Name | Description | Type | Default |
 |------|-------------|------|---------|
-| `name` | VM name in vCenter | `string` | required |
+| `name` | VM name in vSphere | `string` | required |
 | `datacenter` | vSphere datacenter | `string` | required |
-| `cluster_name` | Compute cluster | `string` | required |
-| `host_name` | ESXi host for OVA deployment | `string` | required |
+| `cluster_name` | Optional compute cluster used to resolve the root resource pool | `string` | `null` |
+| `host_name` | Optional ESXi host name for placement; OVA imports require `host_name` or `host_system_id` | `string` | `null` |
+| `host_system_id` | Optional ESXi host managed object ID; takes precedence over `host_name` | `string` | `null` |
 | `datastore_name` | VM datastore | `string` | required |
-| `ova` | OVA source and deployment options | `object` | required |
+| `resource_pool_name` | Optional resource pool name or inventory path | `string` | `null` |
+| `resource_pool_id` | Optional resource pool managed object ID | `string` | `null` |
+| `ova` | OVA import or existing golden image clone options | `object` | required |
 | `network_interfaces` | Ordered VM-Series adapter mappings to vSphere port groups | `list(object)` | required |
 | `custom_attributes` | vSphere custom attribute key/value pairs | `map(string)` | `{}` |
 | `tags` | vSphere tag IDs to attach to the VM | `set(string)` | `[]` |
 | `storage_policy_id` | Optional VM storage policy ID | `string` | `null` |
-| `bootstrap` | Bootstrap ISO generation/upload/attach settings | `object` | disabled |
-| `bootstrap_vm_auth_key` | Panorama VM auth key | `string` | `null` |
+| `vapp_properties` | Additional vApp/OVF property values to set on the VM | `map(string)` | `{}` |
+| `bootstrap` | Bootstrap ISO and native vApp property settings | `object` | disabled |
+| `bootstrap_auth_key` | Optional plugin bootstrap value rendered as `auth-key`; not a substitute for `bootstrap_vm_auth_key` | `string` | `null` |
+| `bootstrap_vapp_options` | Optional value for native `guestinfo.pa_vm.options` when vApp bootstrap is enabled | `string` | `null` |
+| `bootstrap_vm_auth_key` | Panorama VM auth key rendered as `vm-auth-key` for device registration | `string` | `null` |
+| `bootstrap_registration_pin_value` | VM-Series auto-registration PIN value rendered as `vm-series-auto-registration-pin-value` | `string` | `null` |
 | `bootstrap_license_authcodes` | `/license/authcodes` content | `string` | `null` |
+| `bootstrap_files` | Additional generated bootstrap ISO files under `config/`, `license/`, `content/`, `software/`, or `plugins/` | `map(object)` | `{}` |
 | `bootstrap_xml` | Optional `/config/bootstrap.xml` content | `string` | `null` |
 
 ## Outputs
@@ -200,7 +272,45 @@ When `bootstrap.enabled = true` and `bootstrap.create_iso = true`, the module cr
 
 It then builds an ISO, uploads it to the target datastore with `vsphere_file`, and attaches it as a datastore-backed CD-ROM.
 
-Sensitive values such as `bootstrap_vm_auth_key`, `bootstrap_registration_pin_value`, `bootstrap_license_authcodes`, and `bootstrap_xml` are marked sensitive, but they are still written to the local bootstrap work directory and Terraform state will include enough metadata to manage the resources. Use a secure runner and encrypted remote state.
+Use `bootstrap_files` to add environment-specific bootstrap artifacts without changing the module. Each key is a file path relative to the bootstrap root and must be under `config/`, `license/`, `content/`, `software/`, or `plugins/`. Each entry sets exactly one of `content`, `content_base64`, or `source`:
+
+```hcl
+bootstrap_files = {
+  "content/README.txt" = {
+    content = "Optional content files can be included here.\n"
+  }
+
+  "plugins/plugin-package.tgz" = {
+    source = "/secure/artifacts/plugin-package.tgz"
+  }
+}
+```
+
+For VM-Series OVAs that expose native OVF properties, set `bootstrap.vapp_properties_enabled = true` to populate supported `guestinfo.pa_vm.*` keys on the VM:
+
+```hcl
+bootstrap = {
+  enabled                 = true
+  create_iso              = false
+  attach_iso              = false
+  vapp_properties_enabled = true
+  management_type         = "dhcp-client"
+  hostname                = "pa-vmseries-01"
+  panorama_server         = "10.10.20.10"
+  template_stack          = "TS-VMWARE"
+  device_group            = "DG-VMWARE"
+  registration_pin_id     = var.bootstrap_registration_pin_id
+}
+
+bootstrap_vm_auth_key            = var.bootstrap_vm_auth_key
+bootstrap_registration_pin_value = var.bootstrap_registration_pin_value
+bootstrap_license_authcodes      = var.bootstrap_license_authcodes
+bootstrap_vapp_options           = var.bootstrap_vapp_options
+```
+
+Use `vapp_properties` for image-specific OVF properties that are not modeled by the bootstrap object. Values supplied in `vapp_properties` override generated keys with the same name.
+
+Sensitive values such as `bootstrap_vm_auth_key`, `bootstrap_registration_pin_value`, `bootstrap_license_authcodes`, `bootstrap_files`, `bootstrap_vapp_options`, `vapp_properties`, and `bootstrap_xml` are marked sensitive, but they are still written to the local bootstrap work directory, vSphere VM configuration, or Terraform state depending on the selected bootstrap path. Use a secure runner and encrypted remote state.
 
 ## Non-goals
 
@@ -208,7 +318,7 @@ This module does not:
 
 - Generate Panorama VM auth keys.
 - Create Panorama template stacks or device groups.
-- Commit Panorama or PAN-OS configuration.
+- Commit Panorama or PAN-OS configuration, including the Panorama commit usually required after auto-registration adds a new serial to candidate configuration.
 - Register licenses through CSP.
 - Configure NSX-T service insertion.
 - Implement autoscaling.

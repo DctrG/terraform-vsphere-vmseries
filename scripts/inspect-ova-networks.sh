@@ -7,17 +7,14 @@ if [ -z "$OVA_PATH" ]; then
   exit 1
 fi
 
-TMPDIR="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR"' EXIT
-
-tar -xf "$OVA_PATH" -C "$TMPDIR"
-OVF="$(find "$TMPDIR" -maxdepth 1 -name '*.ovf' | head -n 1)"
+OVF="$(tar -tf "$OVA_PATH" | awk '/\.ovf$/ { print; exit }')"
 
 if [ -z "$OVF" ]; then
   echo "No .ovf file found in OVA" >&2
   exit 1
 fi
 
+tar -xOf "$OVA_PATH" "$OVF" |
 awk '
   /Network ovf:name=/ {
     line=$0
@@ -25,4 +22,4 @@ awk '
     sub(/".*$/, "", line)
     print line
   }
-' "$OVF"
+'

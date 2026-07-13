@@ -45,6 +45,19 @@ resource "local_sensitive_file" "bootstrap_xml" {
   depends_on = [terraform_data.bootstrap_dirs]
 }
 
+resource "local_sensitive_file" "bootstrap_files" {
+  for_each = local.bootstrap_create_iso ? toset(local.bootstrap_file_paths) : toset([])
+
+  filename             = "${local.bootstrap_dir}/${each.key}"
+  content              = var.bootstrap_files[each.key].content
+  content_base64       = var.bootstrap_files[each.key].content_base64
+  source               = var.bootstrap_files[each.key].source
+  file_permission      = var.bootstrap_files[each.key].file_permission
+  directory_permission = "0700"
+
+  depends_on = [terraform_data.bootstrap_dirs]
+}
+
 resource "terraform_data" "bootstrap_iso" {
   count = local.bootstrap_create_iso ? 1 : 0
 
@@ -53,7 +66,8 @@ resource "terraform_data" "bootstrap_iso" {
     local.bootstrap_iso_local_path,
     nonsensitive(sha256(local.init_cfg_content)),
     nonsensitive(sha256(var.bootstrap_license_authcodes == null ? "" : var.bootstrap_license_authcodes)),
-    nonsensitive(sha256(var.bootstrap_xml == null ? "" : var.bootstrap_xml))
+    nonsensitive(sha256(var.bootstrap_xml == null ? "" : var.bootstrap_xml)),
+    local.bootstrap_files_fingerprint
   ]
 
   provisioner "local-exec" {
@@ -83,7 +97,8 @@ resource "terraform_data" "bootstrap_iso" {
   depends_on = [
     local_sensitive_file.init_cfg,
     local_sensitive_file.license_authcodes,
-    local_sensitive_file.bootstrap_xml
+    local_sensitive_file.bootstrap_xml,
+    local_sensitive_file.bootstrap_files
   ]
 }
 
