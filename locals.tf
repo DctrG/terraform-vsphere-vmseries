@@ -128,6 +128,7 @@ locals {
     "guestinfo.pa_vm.panorama-server-2"                     = var.bootstrap.panorama_server_2
     "guestinfo.pa_vm.tplname"                               = var.bootstrap.template_stack
     "guestinfo.pa_vm.dgname"                                = var.bootstrap.device_group
+    "guestinfo.pa_vm.auth-key"                              = var.bootstrap_auth_key
     "guestinfo.pa_vm.vm-auth-key"                           = var.bootstrap_vm_auth_key
     "guestinfo.pa_vm.authcodes"                             = var.bootstrap_license_authcodes
     "guestinfo.pa_vm.vm-series-auto-registration-pin-id"    = var.bootstrap.registration_pin_id

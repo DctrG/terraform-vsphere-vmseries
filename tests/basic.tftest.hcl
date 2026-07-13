@@ -207,6 +207,7 @@ run "bootstrap_vapp_properties_plan" {
       registration_pin_id     = "mock-registration-pin-id"
     }
 
+    bootstrap_auth_key               = "mock-plugin-auth-key"
     bootstrap_vm_auth_key            = "mock-auth-key"
     bootstrap_registration_pin_value = "mock-registration-pin-value"
     bootstrap_license_authcodes      = "mock-authcode"
@@ -221,6 +222,11 @@ run "bootstrap_vapp_properties_plan" {
   assert {
     condition     = nonsensitive(vsphere_virtual_machine.this.vapp[0].properties["guestinfo.pa_vm.hostname"]) == "pa-vmseries-vapp-bootstrap"
     error_message = "The vApp hostname property should be generated from bootstrap.hostname."
+  }
+
+  assert {
+    condition     = nonsensitive(vsphere_virtual_machine.this.vapp[0].properties["guestinfo.pa_vm.auth-key"]) == "mock-plugin-auth-key"
+    error_message = "The vApp plugin auth key property should be generated from bootstrap_auth_key."
   }
 
   assert {

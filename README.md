@@ -202,21 +202,19 @@ module "vmseries" {
     dns_secondary   = "10.10.10.11"
 
     op_cmd_dpdk_pkt_io  = "on"
-    plugin_op_commands  = "panorama-licensing-mode-on"
-    registration_pin_id = var.bootstrap_registration_pin_id
+    plugin_op_commands = "panorama-licensing-mode-on"
   }
 
-  bootstrap_vm_auth_key            = var.bootstrap_vm_auth_key
-  bootstrap_registration_pin_value = var.bootstrap_registration_pin_value
+  bootstrap_auth_key               = var.bootstrap_auth_key
   bootstrap_license_authcodes      = var.bootstrap_license_authcodes
 }
 ```
 
-Use the Panorama-generated VM auth key for `bootstrap_vm_auth_key`; VM-Series renders it as `vm-auth-key` and uses it for Panorama registration. This is the key required for automated onboarding into Panorama. Do not replace it with a registration PIN, PIN value, license auth code, or plugin-only auth value.
+For Software Firewall License plugin workflows, use the Panorama-generated bootstrap `auth-key` for `bootstrap_auth_key`. The module renders it as `auth-key` in `/config/init-cfg.txt`; with `plugin-op-commands=panorama-licensing-mode-on`, this is the path tested for automated licensing and Panorama onboarding.
 
-Some Panorama plugin bootstrap workflows also expose an `auth-key` parameter. If your workflow explicitly requires that value, pass it separately as `bootstrap_auth_key`. Do not use `bootstrap_auth_key` as a substitute for `bootstrap_vm_auth_key`; they render to different `init-cfg.txt` keys and serve different bootstrap paths.
+`bootstrap_vm_auth_key` is still available for workflows that explicitly require `vm-auth-key`. Do not mix `auth-key`, `vm-auth-key`, registration PIN values, or license auth codes unless the Panorama/plugin bootstrap output for your workflow includes those fields; they render to different keys and trigger different bootstrap paths.
 
-After the firewall auto-registers, Panorama may place the serial number into candidate configuration for the requested device group and template stack. Commit Panorama so the new serial is present in running configuration, then push policy/templates with the workflow your environment uses.
+Software Firewall License plugin onboarding may take a few minutes after the VM first becomes reachable. The firewall can briefly show `serial: unknown` and `Connected: no` before the license is installed, the management plane restarts, and Panorama accepts the connection. After the firewall auto-registers, Panorama may place the serial number into candidate configuration for the requested device group and template stack. Commit Panorama so the new serial is present in running configuration, then push policy/templates with the workflow your environment uses.
 
 ## Inputs
 
@@ -239,9 +237,9 @@ Key inputs are below. See `variables.tf` for the full contract.
 | `storage_policy_id` | Optional VM storage policy ID | `string` | `null` |
 | `vapp_properties` | Additional vApp/OVF property values to set on the VM | `map(string)` | `{}` |
 | `bootstrap` | Bootstrap ISO and native vApp property settings | `object` | disabled |
-| `bootstrap_auth_key` | Optional plugin bootstrap value rendered as `auth-key`; not a substitute for `bootstrap_vm_auth_key` | `string` | `null` |
+| `bootstrap_auth_key` | Panorama/plugin bootstrap value rendered as `auth-key`; use for Software Firewall License plugin onboarding when Panorama returns an `auth-key` | `string` | `null` |
 | `bootstrap_vapp_options` | Optional value for native `guestinfo.pa_vm.options` when vApp bootstrap is enabled | `string` | `null` |
-| `bootstrap_vm_auth_key` | Panorama VM auth key rendered as `vm-auth-key` for device registration | `string` | `null` |
+| `bootstrap_vm_auth_key` | Panorama VM auth key rendered as `vm-auth-key` for workflows that explicitly require that key | `string` | `null` |
 | `bootstrap_registration_pin_value` | VM-Series auto-registration PIN value rendered as `vm-series-auto-registration-pin-value` | `string` | `null` |
 | `bootstrap_license_authcodes` | `/license/authcodes` content | `string` | `null` |
 | `bootstrap_files` | Additional generated bootstrap ISO files under `config/`, `license/`, `content/`, `software/`, or `plugins/` | `map(object)` | `{}` |
@@ -303,18 +301,16 @@ bootstrap = {
   panorama_server         = "10.10.20.10"
   template_stack          = "TS-VMWARE"
   device_group            = "DG-VMWARE"
-  registration_pin_id     = var.bootstrap_registration_pin_id
 }
 
-bootstrap_vm_auth_key            = var.bootstrap_vm_auth_key
-bootstrap_registration_pin_value = var.bootstrap_registration_pin_value
+bootstrap_auth_key               = var.bootstrap_auth_key
 bootstrap_license_authcodes      = var.bootstrap_license_authcodes
 bootstrap_vapp_options           = var.bootstrap_vapp_options
 ```
 
 Use `vapp_properties` for image-specific OVF properties that are not modeled by the bootstrap object. Values supplied in `vapp_properties` override generated keys with the same name.
 
-Sensitive values such as `bootstrap_vm_auth_key`, `bootstrap_registration_pin_value`, `bootstrap_license_authcodes`, `bootstrap_files`, `bootstrap_vapp_options`, `vapp_properties`, and `bootstrap_xml` are marked sensitive, but they are still written to the local bootstrap work directory, vSphere VM configuration, or Terraform state depending on the selected bootstrap path. Use a secure runner and encrypted remote state.
+Sensitive values such as `bootstrap_auth_key`, `bootstrap_vm_auth_key`, `bootstrap_registration_pin_value`, `bootstrap_license_authcodes`, `bootstrap_files`, `bootstrap_vapp_options`, `vapp_properties`, and `bootstrap_xml` are marked sensitive, but they are still written to the local bootstrap work directory, vSphere VM configuration, or Terraform state depending on the selected bootstrap path. Use a secure runner and encrypted remote state.
 
 ## Non-goals
 

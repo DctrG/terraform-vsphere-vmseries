@@ -89,14 +89,14 @@ variable "template_stack" { type = string }
 variable "device_group" { type = string }
 
 variable "bootstrap_vm_auth_key" {
-  description = "Panorama VM auth key rendered as vm-auth-key for Panorama registration."
+  description = "Optional Panorama VM auth key rendered as vm-auth-key for workflows that explicitly require that key."
   type        = string
   sensitive   = true
   default     = null
 }
 
 variable "bootstrap_auth_key" {
-  description = "Optional plugin bootstrap value rendered as auth-key. Not a replacement for bootstrap_vm_auth_key."
+  description = "Optional Panorama/plugin bootstrap value rendered as auth-key. Use this for Software Firewall License plugin onboarding when Panorama returns an auth-key."
   type        = string
   sensitive   = true
   default     = null

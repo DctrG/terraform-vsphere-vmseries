@@ -43,18 +43,17 @@ panorama_server = "10.10.20.10"
 template_stack  = "TS-VMWARE"
 device_group    = "DG-VMWARE"
 
-# Use the Panorama VM auth key generated for device registration.
-# This is rendered as vm-auth-key and is required for Panorama onboarding.
-bootstrap_vm_auth_key                = "CHANGE_ME"
-bootstrap_plugin_op_commands         = "panorama-licensing-mode-on"
-bootstrap_registration_pin_id        = "CHANGE_ME"
-bootstrap_registration_pin_value     = "CHANGE_ME"
-bootstrap_license_authcodes          = "AUTHCODE1\nAUTHCODE2\n"
+# For Software Firewall License plugin onboarding, use the auth-key returned by
+# request plugins sw_fw_license bootstrap-parameters. This renders auth-key in
+# /config/init-cfg.txt.
+bootstrap_auth_key           = "CHANGE_ME"
+bootstrap_plugin_op_commands = "panorama-licensing-mode-on"
 
-# Optional: only set this if your Panorama plugin bootstrap workflow explicitly
-# provides/requires an auth-key parameter. This is not a replacement for
-# bootstrap_vm_auth_key.
-# bootstrap_auth_key = "CHANGE_ME"
+# Optional: set only when your workflow explicitly returns/requires these keys.
+# bootstrap_vm_auth_key            = "CHANGE_ME"
+# bootstrap_registration_pin_id    = "CHANGE_ME"
+# bootstrap_registration_pin_value = "CHANGE_ME"
+# bootstrap_license_authcodes      = "AUTHCODE1\nAUTHCODE2\n"
 
 # VM-Series OVAs that expose guestinfo.pa_vm.* OVF properties can receive
 # bootstrap values through vApp properties in addition to the bootstrap ISO.

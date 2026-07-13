@@ -408,14 +408,14 @@ variable "bootstrap_vapp_options" {
 }
 
 variable "bootstrap_vm_auth_key" {
-  description = "Optional Panorama VM auth key rendered as vm-auth-key for Panorama registration in the bootstrap ISO and native vApp properties when enabled."
+  description = "Optional Panorama VM auth key rendered as vm-auth-key for workflows that explicitly require that key."
   type        = string
   default     = null
   sensitive   = true
 }
 
 variable "bootstrap_auth_key" {
-  description = "Optional plugin bootstrap value rendered as auth-key in /config/init-cfg.txt when ISO bootstrap is enabled. This is not a replacement for bootstrap_vm_auth_key."
+  description = "Optional Panorama/plugin bootstrap value rendered as auth-key in /config/init-cfg.txt and native vApp properties when enabled. Use this for Software Firewall License plugin onboarding when Panorama returns an auth-key."
   type        = string
   default     = null
   sensitive   = true
