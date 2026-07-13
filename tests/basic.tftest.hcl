@@ -121,7 +121,7 @@ run "bootstrap_plan" {
       enabled             = true
       create_iso          = true
       attach_iso          = true
-      datastore_path      = "vmseries-bootstrap/pa-vmseries-bootstrap/bootstrap.iso"
+      datastore_path      = "pa-vmseries-bootstrap-bootstrap.iso"
       management_type     = "static"
       ip_address          = "10.10.10.51"
       default_gateway     = "10.10.10.1"
@@ -154,7 +154,7 @@ run "bootstrap_plan" {
   }
 
   assert {
-    condition     = output.bootstrap_iso_datastore_path == "vmseries-bootstrap/pa-vmseries-bootstrap/bootstrap.iso"
+    condition     = output.bootstrap_iso_datastore_path == "pa-vmseries-bootstrap-bootstrap.iso"
     error_message = "The bootstrap ISO output should expose the configured datastore path."
   }
 

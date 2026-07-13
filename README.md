@@ -39,6 +39,8 @@ For bootstrap ISO creation, the Terraform runner must have one of these installe
 
 If you do not want Terraform to build the ISO, set `bootstrap.create_iso = false` and either pass `bootstrap.local_iso_path` for upload or pass only `bootstrap.datastore_path` to attach a pre-existing datastore ISO.
 
+By default, generated bootstrap ISOs are uploaded to the datastore root as `<name>-bootstrap.iso`. If you set `bootstrap.datastore_path` to a nested path, pre-create the datastore folders or set `bootstrap.create_datastore_directories = true` for first-time folder creation.
+
 ## vSphere Prerequisites
 
 Ensure these vSphere objects are available to the Terraform user:
@@ -185,7 +187,7 @@ module "vmseries" {
     enabled        = true
     create_iso     = true
     attach_iso     = true
-    datastore_path = "vmseries-bootstrap/pa-vmseries-01/bootstrap.iso"
+    datastore_path = "pa-vmseries-01-bootstrap.iso"
 
     management_type = "static"
     ip_address      = "10.10.10.51"
@@ -271,6 +273,8 @@ When `bootstrap.enabled = true` and `bootstrap.create_iso = true`, the module cr
 ```
 
 It then builds an ISO, uploads it to the target datastore with `vsphere_file`, and attaches it as a datastore-backed CD-ROM.
+
+The default upload path is `<name>-bootstrap.iso` at the datastore root. This avoids repeated apply failures caused by provider-side directory creation when a datastore folder already exists. If your environment requires nested datastore paths, create those folders outside this module or set `bootstrap.create_datastore_directories = true` only when the folders do not already exist.
 
 Use `bootstrap_files` to add environment-specific bootstrap artifacts without changing the module. Each key is a file path relative to the bootstrap root and must be under `config/`, `license/`, `content/`, `software/`, or `plugins/`. Each entry sets exactly one of `content`, `content_base64`, or `source`:
 

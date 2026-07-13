@@ -109,7 +109,7 @@ resource "vsphere_file" "bootstrap_iso" {
   datastore          = local.bootstrap_datastore_name
   source_file        = local.bootstrap_iso_local_path
   destination_file   = local.bootstrap_datastore_path
-  create_directories = true
+  create_directories = var.bootstrap.create_datastore_directories
 
   depends_on = [terraform_data.bootstrap_iso]
 }

@@ -41,7 +41,7 @@ module "vmseries" {
     create_iso              = true
     attach_iso              = true
     vapp_properties_enabled = var.bootstrap_vapp_properties_enabled
-    datastore_path          = "vmseries-bootstrap/${var.name}/bootstrap.iso"
+    datastore_path          = "${var.name}-bootstrap.iso"
 
     management_type = var.mgmt_type
     ip_address      = var.mgmt_ip_address

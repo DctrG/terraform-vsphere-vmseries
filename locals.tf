@@ -64,7 +64,7 @@ locals {
   bootstrap_attach_iso     = local.bootstrap_enabled && var.bootstrap.attach_iso
   bootstrap_vapp_enabled   = local.bootstrap_enabled && var.bootstrap.vapp_properties_enabled
   bootstrap_datastore_name = coalesce(var.bootstrap.datastore_name, var.datastore_name)
-  bootstrap_datastore_path = coalesce(var.bootstrap.datastore_path, "vmseries-bootstrap/${var.name}/bootstrap.iso")
+  bootstrap_datastore_path = coalesce(var.bootstrap.datastore_path, "${var.name}-bootstrap.iso")
   bootstrap_dir            = coalesce(var.bootstrap.work_dir, "${path.root}/.terraform/vmseries-bootstrap/${var.name}")
   bootstrap_iso_local_path = coalesce(var.bootstrap.local_iso_path, "${local.bootstrap_dir}/bootstrap.iso")
   bootstrap_upload_iso     = local.bootstrap_attach_iso && (local.bootstrap_create_iso || var.bootstrap.local_iso_path != null)
