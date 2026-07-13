@@ -8,7 +8,19 @@ cluster_name   = "Cluster01"
 host_name      = "esxi-01.example.local"
 datastore_name = "vsanDatastore"
 folder         = "Network/Security"
-ova_local_path = "/opt/images/PA-VM-ESX.ova"
+
+# Set exactly one image source.
+#
+# Recommended for repeated deployments: clone an already-imported golden
+# VM/template so Terraform does not import the large OVA on every VM create.
+ova_source_image_name = "templates/PA-VM-Series-Golden"
+# ova_source_image_uuid = "422b..."
+# ova_source_image_folder = "templates"
+#
+# First-time import only: use an OVA path or URL to create the golden image.
+# Reusing these for every firewall will run the OVF/OVA import every time.
+# ova_local_path = "/opt/images/PA-VM-ESX.ova"
+# ova_remote_url = "https://example.local/images/PA-VM-ESX.ova"
 
 # Use host_system_id instead of host_name if your automation already resolves
 # the ESXi managed object ID.

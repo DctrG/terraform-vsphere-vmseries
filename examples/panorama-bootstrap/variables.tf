@@ -36,7 +36,89 @@ variable "folder" {
   type    = string
   default = null
 }
-variable "ova_local_path" { type = string }
+variable "ova_local_path" {
+  description = "Optional local OVA path. Use only for first-time OVA import; repeated deployments should use ova_source_image_name or ova_source_image_uuid."
+  type        = string
+  default     = null
+}
+
+variable "ova_remote_url" {
+  description = "Optional remote OVA/OVF URL. Use only for first-time OVA import; repeated deployments should use ova_source_image_name or ova_source_image_uuid."
+  type        = string
+  default     = null
+}
+
+variable "ova_source_image_name" {
+  description = "Optional vSphere VM/template name to clone from for repeated deployments."
+  type        = string
+  default     = null
+}
+
+variable "ova_source_image_uuid" {
+  description = "Optional vSphere VM/template UUID to clone from for repeated deployments."
+  type        = string
+  default     = null
+}
+
+variable "ova_source_image_folder" {
+  description = "Optional vSphere folder containing the source image VM/template."
+  type        = string
+  default     = null
+}
+
+variable "ova_source_image_linked_clone" {
+  description = "Whether to create linked clones from the source image."
+  type        = bool
+  default     = false
+}
+
+variable "ova_source_image_clone_timeout" {
+  description = "Optional timeout, in minutes, for source image clone operations."
+  type        = number
+  default     = null
+}
+
+variable "ova_source_image_scsi_controller_scan_count" {
+  description = "Number of SCSI controllers to scan on the source image."
+  type        = number
+  default     = 1
+}
+
+variable "ova_source_image_nvme_controller_scan_count" {
+  description = "Number of NVMe controllers to scan on the source image."
+  type        = number
+  default     = 1
+}
+
+variable "ova_allow_unverified_ssl_cert" {
+  description = "Allow unverified SSL certificates for remote OVA/OVF import."
+  type        = bool
+  default     = false
+}
+
+variable "ova_deployment_option" {
+  description = "Optional OVF deployment option for OVA/OVF import."
+  type        = string
+  default     = null
+}
+
+variable "ova_ip_protocol" {
+  description = "OVF IP protocol for OVA/OVF import."
+  type        = string
+  default     = "IPV4"
+}
+
+variable "ova_ip_allocation_policy" {
+  description = "OVF IP allocation policy for OVA/OVF import."
+  type        = string
+  default     = "STATIC_MANUAL"
+}
+
+variable "ova_enable_hidden_properties" {
+  description = "Enable hidden OVF properties during OVA/OVF import."
+  type        = bool
+  default     = false
+}
 
 variable "network_interfaces" {
   type = list(object({

@@ -30,7 +30,20 @@ module "vmseries" {
   folder             = var.folder
 
   ova = {
-    local_path = var.ova_local_path
+    local_path                              = var.ova_local_path
+    remote_url                              = var.ova_remote_url
+    source_image_name                       = var.ova_source_image_name
+    source_image_uuid                       = var.ova_source_image_uuid
+    source_image_folder                     = var.ova_source_image_folder
+    source_image_linked_clone               = var.ova_source_image_linked_clone
+    source_image_clone_timeout              = var.ova_source_image_clone_timeout
+    source_image_scsi_controller_scan_count = var.ova_source_image_scsi_controller_scan_count
+    source_image_nvme_controller_scan_count = var.ova_source_image_nvme_controller_scan_count
+    allow_unverified_ssl_cert               = var.ova_allow_unverified_ssl_cert
+    deployment_option                       = var.ova_deployment_option
+    ip_protocol                             = var.ova_ip_protocol
+    ip_allocation_policy                    = var.ova_ip_allocation_policy
+    enable_hidden_properties                = var.ova_enable_hidden_properties
   }
 
   network_interfaces = var.network_interfaces

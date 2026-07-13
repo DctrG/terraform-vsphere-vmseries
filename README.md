@@ -97,7 +97,7 @@ module "vmseries" {
   datastore_name = "vsanDatastore"
 
   ova = {
-    local_path = "/opt/images/PA-VM-ESX.ova"
+    source_image_name = "templates/PA-VM-Series-Golden"
   }
 
   network_interfaces = [
@@ -174,7 +174,7 @@ module "vmseries" {
   datastore_name = "vsanDatastore"
 
   ova = {
-    local_path = "/opt/images/PA-VM-ESX.ova"
+    source_image_name = "templates/PA-VM-Series-Golden"
   }
 
   network_interfaces = [
@@ -201,12 +201,12 @@ module "vmseries" {
     dns_primary     = "10.10.10.10"
     dns_secondary   = "10.10.10.11"
 
-    op_cmd_dpdk_pkt_io  = "on"
+    op_cmd_dpdk_pkt_io = "on"
     plugin_op_commands = "panorama-licensing-mode-on"
   }
 
-  bootstrap_auth_key               = var.bootstrap_auth_key
-  bootstrap_license_authcodes      = var.bootstrap_license_authcodes
+  bootstrap_auth_key          = var.bootstrap_auth_key
+  bootstrap_license_authcodes = var.bootstrap_license_authcodes
 }
 ```
 
