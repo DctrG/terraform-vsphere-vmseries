@@ -4,7 +4,7 @@ terraform {
   required_providers {
     vsphere = {
       source  = "vmware/vsphere"
-      version = ">= 2.14, < 3.0"
+      version = ">= 2.14, < 2.16"
     }
   }
 }
@@ -19,15 +19,17 @@ provider "vsphere" {
 module "vmseries" {
   source = "../../"
 
-  name               = var.name
-  datacenter         = var.datacenter
-  cluster_name       = var.cluster_name
-  host_name          = var.host_name
-  host_system_id     = var.host_system_id
-  datastore_name     = var.datastore_name
-  resource_pool_name = var.resource_pool_name
-  resource_pool_id   = var.resource_pool_id
-  folder             = var.folder
+  name                 = var.name
+  datacenter           = var.datacenter
+  cluster_name         = var.cluster_name
+  host_name            = var.host_name
+  host_system_id       = var.host_system_id
+  datastore_name       = var.datastore_name
+  resource_pool_name   = var.resource_pool_name
+  resource_pool_id     = var.resource_pool_id
+  folder               = var.folder
+  hardware_version     = var.hardware_version
+  num_cores_per_socket = var.num_cores_per_socket
 
   ova = {
     local_path                              = var.ova_local_path
@@ -35,10 +37,14 @@ module "vmseries" {
     source_image_name                       = var.ova_source_image_name
     source_image_uuid                       = var.ova_source_image_uuid
     source_image_folder                     = var.ova_source_image_folder
+    source_image_clone_type                 = var.ova_source_image_clone_type
     source_image_linked_clone               = var.ova_source_image_linked_clone
     source_image_clone_timeout              = var.ova_source_image_clone_timeout
     source_image_scsi_controller_scan_count = var.ova_source_image_scsi_controller_scan_count
     source_image_nvme_controller_scan_count = var.ova_source_image_nvme_controller_scan_count
+    source_image_vmdk_path                  = var.ova_source_image_vmdk_path
+    source_image_disk_datastore_path        = var.ova_source_image_disk_datastore_path
+    source_image_disk_clone_type            = var.ova_source_image_disk_clone_type
     allow_unverified_ssl_cert               = var.ova_allow_unverified_ssl_cert
     deployment_option                       = var.ova_deployment_option
     ip_protocol                             = var.ova_ip_protocol
@@ -48,6 +54,13 @@ module "vmseries" {
 
   network_interfaces = var.network_interfaces
   vapp_properties    = var.vapp_properties
+
+  esxi_ssh_host        = var.esxi_ssh_host
+  esxi_ssh_user        = var.esxi_ssh_user
+  esxi_ssh_password    = var.esxi_ssh_password
+  esxi_ssh_private_key = var.esxi_ssh_private_key
+  esxi_ssh_port        = var.esxi_ssh_port
+  esxi_ssh_timeout     = var.esxi_ssh_timeout
 
   bootstrap = {
     enabled                 = true

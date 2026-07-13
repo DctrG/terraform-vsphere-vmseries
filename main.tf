@@ -1,17 +1,19 @@
 resource "vsphere_virtual_machine" "this" {
   name             = var.name
-  datacenter_id    = data.vsphere_datacenter.this.id
+  datacenter_id    = local.deploy_from_ova ? data.vsphere_datacenter.this.id : null
   datastore_id     = data.vsphere_datastore.vm.id
   resource_pool_id = local.resource_pool_id
   host_system_id   = local.host_system_id
   folder           = var.folder
 
-  num_cpus = coalesce(var.num_cpus, local.image_num_cpus)
-  memory   = coalesce(var.memory_mb, local.image_memory)
-  guest_id = local.image_guest_id
-  firmware = var.firmware != null ? var.firmware : (local.image_firmware != "" ? local.image_firmware : null)
+  num_cpus             = coalesce(var.num_cpus, local.image_num_cpus)
+  num_cores_per_socket = var.num_cores_per_socket
+  memory               = coalesce(var.memory_mb, local.image_memory)
+  guest_id             = local.image_guest_id
+  firmware             = var.firmware != null ? var.firmware : (local.image_firmware != "" ? local.image_firmware : null)
 
-  scsi_type = local.image_scsi_type
+  hardware_version = var.hardware_version != null ? var.hardware_version : (local.clone_with_esxi ? local.image_hardware_version : null)
+  scsi_type        = local.image_scsi_type
 
   annotation             = var.annotation
   custom_attributes      = var.custom_attributes
@@ -58,8 +60,21 @@ resource "vsphere_virtual_machine" "this" {
     }
   }
 
+  dynamic "disk" {
+    for_each = local.clone_with_esxi ? [1] : []
+
+    content {
+      label           = "disk0"
+      attach          = true
+      path            = local.esxi_disk_datastore_vm_path
+      datastore_id    = data.vsphere_datastore.vm.id
+      controller_type = "scsi"
+      unit_number     = 0
+    }
+  }
+
   dynamic "clone" {
-    for_each = local.deploy_from_source_image ? [1] : []
+    for_each = local.clone_with_vcenter ? [1] : []
 
     content {
       template_uuid = data.vsphere_virtual_machine.source_image[0].id
@@ -103,7 +118,12 @@ resource "vsphere_virtual_machine" "this" {
       condition     = !local.deploy_from_ova || local.host_system_id != null
       error_message = "Set host_system_id or host_name when importing an OVA. The vSphere provider requires a target ESXi host for OVF/OVA deployment."
     }
+
+    precondition {
+      condition     = !local.clone_with_esxi || var.esxi_ssh_host != null
+      error_message = "Set esxi_ssh_host when ova.source_image_clone_type is esxi."
+    }
   }
 
-  depends_on = [vsphere_file.bootstrap_iso]
+  depends_on = [terraform_data.esxi_disk_clone, vsphere_file.bootstrap_iso]
 }

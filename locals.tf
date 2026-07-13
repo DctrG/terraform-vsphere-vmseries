@@ -1,6 +1,9 @@
 locals {
   deploy_from_source_image = var.ova.source_image_name != null || var.ova.source_image_uuid != null
   deploy_from_ova          = !local.deploy_from_source_image
+  source_image_clone_type  = local.deploy_from_source_image ? var.ova.source_image_clone_type : null
+  clone_with_vcenter       = local.deploy_from_source_image && local.source_image_clone_type == "vcenter"
+  clone_with_esxi          = local.deploy_from_source_image && local.source_image_clone_type == "esxi"
 
   image_num_cpus = try(coalesce(
     try(data.vsphere_virtual_machine.source_image[0].num_cpus, null),
@@ -21,12 +24,24 @@ locals {
     try(data.vsphere_virtual_machine.source_image[0].firmware, null),
     try(data.vsphere_ovf_vm_template.this[0].firmware, null)
   ), "")
+  image_hardware_version = try(data.vsphere_virtual_machine.source_image[0].hardware_version, null)
   image_scsi_type = try(coalesce(
     try(data.vsphere_virtual_machine.source_image[0].scsi_type, null),
     try(data.vsphere_ovf_vm_template.this[0].scsi_type, null),
     "lsilogic"
   ), "lsilogic")
-  source_image_disks = try(data.vsphere_virtual_machine.source_image[0].disks, [])
+  source_image_disks = local.clone_with_vcenter ? try(data.vsphere_virtual_machine.source_image[0].disks, []) : []
+  esxi_disk_datastore_path = local.clone_with_esxi ? coalesce(
+    var.ova.source_image_disk_datastore_path,
+    "${var.name}-disk/${var.name}.vmdk"
+  ) : null
+  esxi_disk_datastore_vm_path = local.clone_with_esxi ? "[${var.datastore_name}] ${local.esxi_disk_datastore_path}" : null
+  esxi_disk_vmfs_path         = local.clone_with_esxi ? "/vmfs/volumes/${var.datastore_name}/${local.esxi_disk_datastore_path}" : null
+  esxi_disk_vmfs_dir          = local.clone_with_esxi ? dirname(local.esxi_disk_vmfs_path) : null
+  esxi_source_vmdk_shell      = local.clone_with_esxi ? "'${replace(var.ova.source_image_vmdk_path, "'", "'\"'\"'")}'" : null
+  esxi_disk_vmfs_path_shell   = local.clone_with_esxi ? "'${replace(local.esxi_disk_vmfs_path, "'", "'\"'\"'")}'" : null
+  esxi_disk_vmfs_dir_shell    = local.clone_with_esxi ? "'${replace(local.esxi_disk_vmfs_dir, "'", "'\"'\"'")}'" : null
+  esxi_disk_clone_type_shell  = local.clone_with_esxi ? "'${replace(var.ova.source_image_disk_clone_type, "'", "'\"'\"'")}'" : null
 
   resource_pool_id = try(coalesce(
     var.resource_pool_id,

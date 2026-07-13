@@ -36,6 +36,16 @@ variable "folder" {
   type    = string
   default = null
 }
+variable "hardware_version" {
+  description = "Optional VM hardware version override. Usually null; ESXi source-image mode inherits this from the golden image when available."
+  type        = number
+  default     = null
+}
+variable "num_cores_per_socket" {
+  description = "Optional cores-per-socket override."
+  type        = number
+  default     = null
+}
 variable "ova_local_path" {
   description = "Optional local OVA path. Use only for first-time OVA import; repeated deployments should use ova_source_image_name or ova_source_image_uuid."
   type        = string
@@ -66,6 +76,17 @@ variable "ova_source_image_folder" {
   default     = null
 }
 
+variable "ova_source_image_clone_type" {
+  description = "How to clone from a source image. Use vcenter for vCenter VM/template clone, or esxi for SSH-assisted VMDK copy on standalone ESXi."
+  type        = string
+  default     = "vcenter"
+
+  validation {
+    condition     = contains(["vcenter", "esxi"], var.ova_source_image_clone_type)
+    error_message = "ova_source_image_clone_type must be either vcenter or esxi."
+  }
+}
+
 variable "ova_source_image_linked_clone" {
   description = "Whether to create linked clones from the source image."
   type        = bool
@@ -88,6 +109,67 @@ variable "ova_source_image_nvme_controller_scan_count" {
   description = "Number of NVMe controllers to scan on the source image."
   type        = number
   default     = 1
+}
+
+variable "ova_source_image_vmdk_path" {
+  description = "Absolute VMFS path to the golden image VMDK descriptor when ova_source_image_clone_type is esxi."
+  type        = string
+  default     = null
+}
+
+variable "ova_source_image_disk_datastore_path" {
+  description = "Optional destination datastore path for the per-VM cloned VMDK when ova_source_image_clone_type is esxi."
+  type        = string
+  default     = null
+}
+
+variable "ova_source_image_disk_clone_type" {
+  description = "vmkfstools disk clone type when ova_source_image_clone_type is esxi."
+  type        = string
+  default     = "thin"
+
+  validation {
+    condition     = contains(["thin", "zeroedthick", "eagerzeroedthick"], var.ova_source_image_disk_clone_type)
+    error_message = "ova_source_image_disk_clone_type must be one of: thin, zeroedthick, eagerzeroedthick."
+  }
+}
+
+variable "esxi_ssh_host" {
+  description = "Optional ESXi SSH host used only when ova_source_image_clone_type is esxi."
+  type        = string
+  default     = null
+}
+
+variable "esxi_ssh_user" {
+  description = "ESXi SSH user used only when ova_source_image_clone_type is esxi."
+  type        = string
+  default     = "root"
+}
+
+variable "esxi_ssh_password" {
+  description = "Optional ESXi SSH password used only when ova_source_image_clone_type is esxi."
+  type        = string
+  sensitive   = true
+  default     = null
+}
+
+variable "esxi_ssh_private_key" {
+  description = "Optional ESXi SSH private key contents used only when ova_source_image_clone_type is esxi."
+  type        = string
+  sensitive   = true
+  default     = null
+}
+
+variable "esxi_ssh_port" {
+  description = "ESXi SSH port used only when ova_source_image_clone_type is esxi."
+  type        = number
+  default     = 22
+}
+
+variable "esxi_ssh_timeout" {
+  description = "ESXi SSH connection timeout used only when ova_source_image_clone_type is esxi."
+  type        = string
+  default     = "10m"
 }
 
 variable "ova_allow_unverified_ssl_cert" {

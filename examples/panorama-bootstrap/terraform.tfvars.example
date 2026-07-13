@@ -17,6 +17,14 @@ ova_source_image_name = "templates/PA-VM-Series-Golden"
 # ova_source_image_uuid = "422b..."
 # ova_source_image_folder = "templates"
 #
+# vCenter clone is the default. For standalone ESXi, copy the golden VMDK on
+# the datastore with vmkfstools over SSH and attach that per-VM disk copy.
+# ova_source_image_clone_type = "esxi"
+# ova_source_image_vmdk_path  = "/vmfs/volumes/datastore1/PA-VM-Series-Golden/PA-VM-Series-Golden.vmdk"
+# esxi_ssh_host              = "192.0.2.10"
+# esxi_ssh_user              = "root"
+# esxi_ssh_private_key       = file("/secure/keys/esxi_id_rsa")
+#
 # First-time import only: use an OVA path or URL to create the golden image.
 # Reusing these for every firewall will run the OVF/OVA import every time.
 # ova_local_path = "/opt/images/PA-VM-ESX.ova"

@@ -92,10 +92,14 @@ variable "ova" {
     source_image_name                       = optional(string)
     source_image_uuid                       = optional(string)
     source_image_folder                     = optional(string)
+    source_image_clone_type                 = optional(string, "vcenter")
     source_image_linked_clone               = optional(bool, false)
     source_image_clone_timeout              = optional(number)
     source_image_scsi_controller_scan_count = optional(number, 1)
     source_image_nvme_controller_scan_count = optional(number, 1)
+    source_image_vmdk_path                  = optional(string)
+    source_image_disk_datastore_path        = optional(string)
+    source_image_disk_clone_type            = optional(string, "thin")
     allow_unverified_ssl_cert               = optional(bool, false)
     deployment_option                       = optional(string)
     ip_protocol                             = optional(string, "IPV4")
@@ -135,11 +139,99 @@ variable "ova" {
   }
 
   validation {
+    condition     = contains(["vcenter", "esxi"], try(var.ova.source_image_clone_type, "vcenter"))
+    error_message = "ova.source_image_clone_type must be either vcenter or esxi."
+  }
+
+  validation {
+    condition     = try(var.ova.source_image_clone_type, "vcenter") != "esxi" || try(var.ova.source_image_vmdk_path, null) != null
+    error_message = "ova.source_image_vmdk_path is required when ova.source_image_clone_type is esxi."
+  }
+
+  validation {
+    condition     = try(var.ova.source_image_clone_type, "vcenter") != "esxi" || !try(var.ova.source_image_linked_clone, false)
+    error_message = "ova.source_image_linked_clone is only supported with ova.source_image_clone_type set to vcenter."
+  }
+
+  validation {
+    condition = alltrue([
+      for path in [
+        try(var.ova.source_image_vmdk_path, null),
+        try(var.ova.source_image_disk_datastore_path, null)
+      ] : path == null ? true : length(trimspace(path)) > 0
+    ])
+    error_message = "ESXi source image VMDK paths must be non-empty when set."
+  }
+
+  validation {
+    condition     = contains(["thin", "zeroedthick", "eagerzeroedthick"], try(var.ova.source_image_disk_clone_type, "thin"))
+    error_message = "ova.source_image_disk_clone_type must be one of: thin, zeroedthick, eagerzeroedthick."
+  }
+
+  validation {
     condition = (
       try(var.ova.source_image_scsi_controller_scan_count, 1) >= 1 &&
       try(var.ova.source_image_nvme_controller_scan_count, 1) >= 1
     )
     error_message = "source image controller scan counts must be greater than or equal to 1."
+  }
+}
+
+variable "esxi_ssh_host" {
+  description = "Optional ESXi SSH host used only when ova.source_image_clone_type is esxi."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = try(length(trimspace(var.esxi_ssh_host)) > 0, true)
+    error_message = "esxi_ssh_host must not be empty when set."
+  }
+}
+
+variable "esxi_ssh_user" {
+  description = "ESXi SSH user used only when ova.source_image_clone_type is esxi."
+  type        = string
+  default     = "root"
+
+  validation {
+    condition     = length(trimspace(var.esxi_ssh_user)) > 0
+    error_message = "esxi_ssh_user must not be empty."
+  }
+}
+
+variable "esxi_ssh_password" {
+  description = "Optional ESXi SSH password used only when ova.source_image_clone_type is esxi."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "esxi_ssh_private_key" {
+  description = "Optional ESXi SSH private key contents used only when ova.source_image_clone_type is esxi."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "esxi_ssh_port" {
+  description = "ESXi SSH port used only when ova.source_image_clone_type is esxi."
+  type        = number
+  default     = 22
+
+  validation {
+    condition     = var.esxi_ssh_port > 0 && var.esxi_ssh_port <= 65535
+    error_message = "esxi_ssh_port must be between 1 and 65535."
+  }
+}
+
+variable "esxi_ssh_timeout" {
+  description = "ESXi SSH connection timeout used only when ova.source_image_clone_type is esxi."
+  type        = string
+  default     = "10m"
+
+  validation {
+    condition     = length(trimspace(var.esxi_ssh_timeout)) > 0
+    error_message = "esxi_ssh_timeout must not be empty."
   }
 }
 
@@ -219,8 +311,20 @@ variable "num_cpus" {
   default     = null
 }
 
+variable "num_cores_per_socket" {
+  description = "Optional cores-per-socket override."
+  type        = number
+  default     = null
+}
+
 variable "memory_mb" {
   description = "Optional memory override in MB. If null, the OVA default is used."
+  type        = number
+  default     = null
+}
+
+variable "hardware_version" {
+  description = "Optional VM virtual hardware version override. If null, standalone ESXi source-image deployments inherit the source image hardware version when available."
   type        = number
   default     = null
 }

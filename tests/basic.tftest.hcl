@@ -52,6 +52,7 @@ mock_provider "vsphere" {
       id                      = "source-image-uuid"
       firmware                = "bios"
       guest_id                = "otherLinux64Guest"
+      hardware_version        = 10
       memory                  = 8192
       num_cpus                = 2
       scsi_type               = "lsilogic"
@@ -262,6 +263,11 @@ run "source_image_clone_plan" {
   }
 
   assert {
+    condition     = vsphere_virtual_machine.this.datacenter_id == null
+    error_message = "The VM resource should not set datacenter_id when cloning from a source image."
+  }
+
+  assert {
     condition     = length(vsphere_virtual_machine.this.ovf_deploy) == 0
     error_message = "The VM should not run ovf_deploy when cloning from a source image."
   }
@@ -269,6 +275,57 @@ run "source_image_clone_plan" {
   assert {
     condition     = vsphere_virtual_machine.this.disk[0].size == 60
     error_message = "The VM should inherit disk sizing from the source image."
+  }
+}
+
+run "standalone_esxi_source_image_plan" {
+  command = plan
+
+  variables {
+    name                 = "pa-vmseries-esxi-source-image"
+    cluster_name         = null
+    resource_pool_id     = "resource-pool-standalone"
+    datastore_name       = "datastore1"
+    num_cores_per_socket = 2
+
+    ova = {
+      source_image_name       = "PA-VM-Series-Golden"
+      source_image_clone_type = "esxi"
+      source_image_vmdk_path  = "/vmfs/volumes/datastore1/PA-VM-Series-Golden/PA-VM-Series-Golden.vmdk"
+    }
+
+    esxi_ssh_host     = "esxi-01.example.local"
+    esxi_ssh_password = "mock-password"
+  }
+
+  assert {
+    condition     = length(vsphere_virtual_machine.this.clone) == 0
+    error_message = "Standalone ESXi source image mode should not use the vCenter-only clone block."
+  }
+
+  assert {
+    condition     = vsphere_virtual_machine.this.disk[0].attach == true
+    error_message = "Standalone ESXi source image mode should attach the copied VMDK."
+  }
+
+  assert {
+    condition     = vsphere_virtual_machine.this.hardware_version == 10
+    error_message = "Standalone ESXi source image mode should inherit the source image hardware version."
+  }
+
+  assert {
+    condition     = vsphere_virtual_machine.this.num_cores_per_socket == 2
+    error_message = "Standalone ESXi source image mode should honor the cores-per-socket override."
+  }
+
+  assert {
+    condition     = vsphere_virtual_machine.this.disk[0].path == "[datastore1] pa-vmseries-esxi-source-image-disk/pa-vmseries-esxi-source-image.vmdk"
+    error_message = "Standalone ESXi source image mode should attach the per-VM cloned VMDK path."
+  }
+
+  assert {
+    condition     = terraform_data.esxi_disk_clone[0].input.destination_vmdk_path == "/vmfs/volumes/datastore1/pa-vmseries-esxi-source-image-disk/pa-vmseries-esxi-source-image.vmdk"
+    error_message = "Standalone ESXi source image mode should clone the golden VMDK to the per-VM datastore path."
   }
 }
 

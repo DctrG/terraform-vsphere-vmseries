@@ -16,7 +16,8 @@ Panorama / PAN-OS policy, templates, device groups, CSP licensing inventory, and
 ## Supported Patterns
 
 - Import a VM-Series OVA from a local file path or HTTPS URL.
-- Clone from an already-imported VM-Series golden image VM/template.
+- Clone from an already-imported VM-Series golden image VM/template through vCenter.
+- Copy a golden-image VMDK on standalone ESXi with `vmkfstools` over SSH when vCenter is not available.
 - Deploy through vCenter clusters or standalone ESXi inventory.
 - Resolve placement by cluster, resource pool name, resource pool ID, host name, or host managed object ID.
 - Bootstrap with an ISO, native `guestinfo.pa_vm.*` vApp properties, or both.
@@ -27,7 +28,7 @@ Panorama / PAN-OS policy, templates, device groups, CSP licensing inventory, and
 | Name | Version |
 |------|---------|
 | terraform | >= 1.5.0 |
-| vmware/vsphere | >= 2.14, < 3.0 |
+| vmware/vsphere | >= 2.14, < 2.16 |
 | hashicorp/local | >= 2.4, < 3.0 |
 
 For bootstrap ISO creation, the Terraform runner must have one of these installed:
@@ -50,11 +51,14 @@ Ensure these vSphere objects are available to the Terraform user:
 - One VM folder if you set `folder`; the module does not create folders.
 - Port groups or NSX segments for management and dataplane adapters.
 - A local OVA path visible to the Terraform runner, an HTTPS URL in `ova.remote_url`, or an already-imported golden image VM/template to clone with `ova.source_image_name` or `ova.source_image_uuid`.
+- For standalone ESXi golden-image reuse, SSH access to the ESXi host and the absolute VMFS path to the golden image VMDK descriptor.
 - For bootstrap ISO generation, one supported ISO builder on the Terraform runner.
 
 For standalone ESXi deployments, use the host's local inventory values, such as `datacenter = "ha-datacenter"` and `resource_pool_name = "Resources"`, or pass a discovered `resource_pool_id`.
 
-The OVA virtual hardware family must be supported by the target ESXi/vCenter version. The module does not down-convert OVF descriptors; if vSphere reports an error such as `Unsupported hardware family 'vmx-19'`, use a compatible VM-Series image, import a compatible golden image and clone it with `ova.source_image_name` or `ova.source_image_uuid`, or upgrade the vSphere environment.
+The OVA virtual hardware family must be supported by the target ESXi/vCenter version. The module does not down-convert OVF descriptors; if vSphere reports an error such as `Unsupported hardware family 'vmx-19'`, use a compatible VM-Series image, import a compatible golden image and reuse it with `ova.source_image_name` or `ova.source_image_uuid`, or upgrade the vSphere environment.
+
+The vSphere provider `2.16.x` currently fails in the tested standalone ESXi source-image path, so this module pins the provider below `2.16` until that provider behavior is resolved.
 
 ## OVA Network Mapping
 
@@ -76,7 +80,7 @@ network_interfaces = [
 ]
 ```
 
-## Basic OVA Deployment
+## Basic Deployment
 
 ```hcl
 provider "vsphere" {
@@ -133,7 +137,11 @@ resource_pool_name = "Resources"
 
 ## Reusing a Golden Image
 
-For repeated deployments, create a vSphere golden image once by importing the VM-Series OVA and converting the result into the VM or template your team wants to clone. Then point this module at that golden image instead of supplying `ova.local_path` or `ova.remote_url`. Terraform will clone the golden image and skip the OVF/OVA import.
+For repeated deployments, create a vSphere golden image once by importing the VM-Series OVA and converting the result into the VM or template your team wants to reuse. Then point this module at that golden image instead of supplying `ova.local_path` or `ova.remote_url`. Terraform will skip the OVF/OVA import for every firewall VM.
+
+Use a clean golden image that has not been licensed, registered to Panorama, or customized as a specific firewall. For bootstrap testing, prefer a never-booted imported VM/template so the first boot of each deployed VM consumes its own bootstrap package.
+
+With vCenter, use the native provider clone path:
 
 ```hcl
 module "vmseries" {
@@ -159,6 +167,42 @@ module "vmseries" {
 ```
 
 The golden image must be an existing vSphere VM/template, not only a raw `.ova` file uploaded to a datastore. Use `source_image_name` or `source_image_uuid` for later VMs after the golden image exists.
+
+With standalone ESXi, the vSphere provider cannot use the `clone` block directly. Set `ova.source_image_clone_type = "esxi"` so the module copies the golden VMDK on the datastore with `vmkfstools` over SSH, creates a VM, and attaches the copied disk:
+
+```hcl
+module "vmseries" {
+  source  = "DctrG/vmseries/vsphere"
+  version = "~> 0.1"
+
+  name             = "pa-vmseries-02"
+  datacenter       = "ha-datacenter"
+  cluster_name     = null
+  host_name        = "localhost.localdomain"
+  datastore_name   = "datastore1"
+  resource_pool_id = "ha-root-pool"
+
+  ova = {
+    source_image_name        = "PA-VM-Series-Golden"
+    source_image_clone_type  = "esxi"
+    source_image_vmdk_path   = "/vmfs/volumes/datastore1/PA-VM-Series-Golden/PA-VM-Series-Golden.vmdk"
+  }
+
+  esxi_ssh_host        = "192.0.2.10"
+  esxi_ssh_user        = "root"
+  esxi_ssh_private_key = var.esxi_ssh_private_key
+
+  network_interfaces = [
+    { ovf_label = "VM Network", ovf_mapping = "Ethernet 1", network_name = "PG-MGMT" },
+    { ovf_label = "VM Network", ovf_mapping = "Ethernet 2", network_name = "PG-UNTRUST" },
+    { ovf_label = "VM Network", ovf_mapping = "Ethernet 3", network_name = "PG-TRUST" }
+  ]
+}
+```
+
+By default, the per-VM disk copy is written to `<name>-disk/<name>.vmdk` on `datastore_name`. Override `ova.source_image_disk_datastore_path` when your datastore layout requires a different path. Do not point that destination at the golden image VMDK.
+
+In standalone ESXi source-image mode, the VM inherits the source image hardware version when the provider can read it. Set `num_cores_per_socket` when your golden image expects a specific CPU topology.
 
 ## Panorama Bootstrap
 
@@ -210,11 +254,11 @@ module "vmseries" {
 }
 ```
 
-For Software Firewall License plugin workflows, use the Panorama-generated bootstrap `auth-key` for `bootstrap_auth_key`. The module renders it as `auth-key` in `/config/init-cfg.txt`; with `plugin-op-commands=panorama-licensing-mode-on`, this is the path tested for automated licensing and Panorama onboarding.
+For Software Firewall License plugin workflows, use the Panorama-generated bootstrap `auth-key` for `bootstrap_auth_key`. The module renders it as `auth-key` in `/config/init-cfg.txt`; with `plugin-op-commands=panorama-licensing-mode-on`, the firewall enters Panorama licensing mode during bootstrap. License assignment, serial registration, and Panorama commits are performed by Panorama and the plugin, not by this module.
 
 `bootstrap_vm_auth_key` is still available for workflows that explicitly require `vm-auth-key`. Do not mix `auth-key`, `vm-auth-key`, registration PIN values, or license auth codes unless the Panorama/plugin bootstrap output for your workflow includes those fields; they render to different keys and trigger different bootstrap paths.
 
-Software Firewall License plugin onboarding may take a few minutes after the VM first becomes reachable. The firewall can briefly show `serial: unknown` and `Connected: no` before the license is installed, the management plane restarts, and Panorama accepts the connection. After the firewall auto-registers, Panorama may place the serial number into candidate configuration for the requested device group and template stack. Commit Panorama so the new serial is present in running configuration, then push policy/templates with the workflow your environment uses.
+Software Firewall License plugin onboarding may take a few minutes after the VM first becomes reachable. The firewall can briefly show `serial: unknown` and `Connected: no` before the license is installed, the management plane restarts, and Panorama accepts the connection. If the firewall stays in Panorama licensing mode with `vm-license: none`, troubleshoot the Panorama/plugin workflow first: confirm the bootstrap parameters match `request plugins sw_fw_license bootstrap-parameters`, the configured Panorama address is reachable from the firewall, the auth key is valid, and the plugin can assign capacity. After the firewall auto-registers, Panorama may place the serial number into candidate configuration for the requested device group and template stack. Commit Panorama so the new serial is present in running configuration, then push policy/templates with the workflow your environment uses.
 
 ## Inputs
 
@@ -228,9 +272,15 @@ Key inputs are below. See `variables.tf` for the full contract.
 | `host_name` | Optional ESXi host name for placement; OVA imports require `host_name` or `host_system_id` | `string` | `null` |
 | `host_system_id` | Optional ESXi host managed object ID; takes precedence over `host_name` | `string` | `null` |
 | `datastore_name` | VM datastore | `string` | required |
+| `hardware_version` | Optional VM virtual hardware version override | `number` | `null` |
+| `num_cores_per_socket` | Optional CPU cores-per-socket override | `number` | `null` |
 | `resource_pool_name` | Optional resource pool name or inventory path | `string` | `null` |
 | `resource_pool_id` | Optional resource pool managed object ID | `string` | `null` |
 | `ova` | OVA import or existing golden image clone options | `object` | required |
+| `esxi_ssh_host` | ESXi SSH host for `ova.source_image_clone_type = "esxi"` | `string` | `null` |
+| `esxi_ssh_user` | ESXi SSH user for `ova.source_image_clone_type = "esxi"` | `string` | `root` |
+| `esxi_ssh_password` | Optional ESXi SSH password for standalone ESXi VMDK copy | `string` | `null` |
+| `esxi_ssh_private_key` | Optional ESXi SSH private key contents for standalone ESXi VMDK copy | `string` | `null` |
 | `network_interfaces` | Ordered VM-Series adapter mappings to vSphere port groups | `list(object)` | required |
 | `custom_attributes` | vSphere custom attribute key/value pairs | `map(string)` | `{}` |
 | `tags` | vSphere tag IDs to attach to the VM | `set(string)` | `[]` |
@@ -310,7 +360,7 @@ bootstrap_vapp_options           = var.bootstrap_vapp_options
 
 Use `vapp_properties` for image-specific OVF properties that are not modeled by the bootstrap object. Values supplied in `vapp_properties` override generated keys with the same name.
 
-Sensitive values such as `bootstrap_auth_key`, `bootstrap_vm_auth_key`, `bootstrap_registration_pin_value`, `bootstrap_license_authcodes`, `bootstrap_files`, `bootstrap_vapp_options`, `vapp_properties`, and `bootstrap_xml` are marked sensitive, but they are still written to the local bootstrap work directory, vSphere VM configuration, or Terraform state depending on the selected bootstrap path. Use a secure runner and encrypted remote state.
+Sensitive values such as `esxi_ssh_password`, `esxi_ssh_private_key`, `bootstrap_auth_key`, `bootstrap_vm_auth_key`, `bootstrap_registration_pin_value`, `bootstrap_license_authcodes`, `bootstrap_files`, `bootstrap_vapp_options`, `vapp_properties`, and `bootstrap_xml` are marked sensitive, but they are still used by the Terraform runner and can be written to the local bootstrap work directory, vSphere VM configuration, or Terraform state depending on the selected path. Use a secure runner and encrypted remote state.
 
 ## Non-goals
 
@@ -319,7 +369,7 @@ This module does not:
 - Generate Panorama VM auth keys.
 - Create Panorama template stacks or device groups.
 - Commit Panorama or PAN-OS configuration, including the Panorama commit usually required after auto-registration adds a new serial to candidate configuration.
-- Register licenses through CSP.
+- Register licenses through CSP or operate the Panorama Software Firewall License plugin.
 - Configure NSX-T service insertion.
 - Implement autoscaling.
 
