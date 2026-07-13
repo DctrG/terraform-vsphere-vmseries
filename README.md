@@ -239,7 +239,8 @@ module "vmseries" {
     netmask         = "255.255.255.0"
     hostname        = "pa-vmseries-01"
 
-    panorama_server = "10.10.20.10"
+    # Use the Panorama address reachable from the VM-Series management interface.
+    panorama_server = "panorama.example.com"
     template_stack  = "TS-VMWARE"
     device_group    = "DG-VMWARE"
     dns_primary     = "10.10.10.10"
@@ -254,11 +255,11 @@ module "vmseries" {
 }
 ```
 
-For Software Firewall License plugin workflows, use the Panorama-generated bootstrap `auth-key` for `bootstrap_auth_key`. The module renders it as `auth-key` in `/config/init-cfg.txt`; with `plugin-op-commands=panorama-licensing-mode-on`, the firewall enters Panorama licensing mode during bootstrap. License assignment, serial registration, and Panorama commits are performed by Panorama and the plugin, not by this module.
+For Software Firewall License plugin workflows, use the Panorama-generated bootstrap `auth-key` for `bootstrap_auth_key`. Set `bootstrap.panorama_server` to the Panorama address reachable from the firewall management interface. If Panorama is behind NAT, this is typically the public address or DNS name, even if `request plugins sw_fw_license bootstrap-parameters` prints Panorama's private address. The module renders those values into `/config/init-cfg.txt`; with `plugin-op-commands=panorama-licensing-mode-on`, the firewall enters Panorama licensing mode during bootstrap. License assignment, serial registration, and Panorama commits are performed by Panorama and the plugin, not by this module.
 
 `bootstrap_vm_auth_key` is still available for workflows that explicitly require `vm-auth-key`. Do not mix `auth-key`, `vm-auth-key`, registration PIN values, or license auth codes unless the Panorama/plugin bootstrap output for your workflow includes those fields; they render to different keys and trigger different bootstrap paths.
 
-Software Firewall License plugin onboarding may take a few minutes after the VM first becomes reachable. The firewall can briefly show `serial: unknown` and `Connected: no` before the license is installed, the management plane restarts, and Panorama accepts the connection. If the firewall stays in Panorama licensing mode with `vm-license: none`, troubleshoot the Panorama/plugin workflow first: confirm the bootstrap parameters match `request plugins sw_fw_license bootstrap-parameters`, the configured Panorama address is reachable from the firewall, the auth key is valid, and the plugin can assign capacity. After the firewall auto-registers, Panorama may place the serial number into candidate configuration for the requested device group and template stack. Commit Panorama so the new serial is present in running configuration, then push policy/templates with the workflow your environment uses.
+Software Firewall License plugin onboarding may take a few minutes after the VM first becomes reachable. The firewall can briefly show `serial: unknown` and `Connected: no` before the license is installed, the management plane restarts, and Panorama accepts the connection. If the firewall stays in Panorama licensing mode with `vm-license: none`, troubleshoot the Panorama/plugin workflow first: confirm the auth key, device group, template stack, and plugin op command match `request plugins sw_fw_license bootstrap-parameters`; confirm the rendered `panorama-server` is the public or otherwise reachable address from the firewall; and confirm the plugin can assign capacity. After the firewall auto-registers, Panorama may place the serial number into candidate configuration for the requested device group and template stack. Commit Panorama so the new serial is present in running configuration, then push policy/templates with the workflow your environment uses.
 
 ## Inputs
 

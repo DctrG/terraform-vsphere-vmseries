@@ -59,7 +59,10 @@ dns_secondary        = "10.10.10.11"
 # mgmt_default_gateway = null
 # mgmt_netmask         = null
 
-panorama_server = "10.10.20.10"
+# Use the Panorama address reachable from the firewall management interface.
+# If Panorama is behind NAT, this is usually the public IP or DNS name, even if
+# request plugins sw_fw_license bootstrap-parameters prints a private address.
+panorama_server = "panorama.example.com"
 template_stack  = "TS-VMWARE"
 device_group    = "DG-VMWARE"
 

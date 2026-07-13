@@ -248,7 +248,10 @@ variable "dns_secondary" {
   default = null
 }
 
-variable "panorama_server" { type = string }
+variable "panorama_server" {
+  description = "Panorama address reachable from the firewall management interface; use the public/NAT address when Panorama's private address is not reachable."
+  type        = string
+}
 variable "template_stack" { type = string }
 variable "device_group" { type = string }
 
