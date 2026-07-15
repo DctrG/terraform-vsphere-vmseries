@@ -73,7 +73,7 @@ module "vmseries" {
     ip_address      = var.mgmt_ip_address
     default_gateway = var.mgmt_default_gateway
     netmask         = var.mgmt_netmask
-    hostname        = var.name
+    hostname        = coalesce(var.bootstrap_hostname, var.name)
 
     panorama_server = var.panorama_server
     template_stack  = var.template_stack

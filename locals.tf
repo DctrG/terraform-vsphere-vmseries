@@ -85,14 +85,14 @@ locals {
   bootstrap_upload_iso     = local.bootstrap_attach_iso && (local.bootstrap_create_iso || var.bootstrap.local_iso_path != null)
   bootstrap_management_ip  = var.bootstrap.management_type == "static" ? var.bootstrap.ip_address : null
   bootstrap_file_paths     = sort(keys(nonsensitive(var.bootstrap_files)))
-  bootstrap_files_fingerprint = nonsensitive(sha256(jsonencode({
+  bootstrap_files_fingerprint = sha256(jsonencode({
     for path in local.bootstrap_file_paths : path => {
       content_sha256        = var.bootstrap_files[path].content == null ? null : sha256(var.bootstrap_files[path].content)
       content_base64_sha256 = var.bootstrap_files[path].content_base64 == null ? null : sha256(var.bootstrap_files[path].content_base64)
       source_sha256         = var.bootstrap_files[path].source == null ? null : filesha256(nonsensitive(var.bootstrap_files[path].source))
       file_permission       = var.bootstrap_files[path].file_permission
     }
-  })))
+  }))
 
   init_cfg_ordered_lines = compact([
     "type=${var.bootstrap.management_type}",
@@ -108,6 +108,8 @@ locals {
     var.bootstrap.device_group != null ? "dgname=${var.bootstrap.device_group}" : null,
     var.bootstrap.dns_primary != null ? "dns-primary=${var.bootstrap.dns_primary}" : null,
     var.bootstrap.dns_secondary != null ? "dns-secondary=${var.bootstrap.dns_secondary}" : null,
+    var.bootstrap_auth_key != null ? "auth-key=${var.bootstrap_auth_key}" : null,
+    var.bootstrap_vm_auth_key != null ? "vm-auth-key=${var.bootstrap_vm_auth_key}" : null,
     var.bootstrap.op_command_modes != null ? "op-command-modes=${var.bootstrap.op_command_modes}" : null,
     var.bootstrap.op_cmd_dpdk_pkt_io != null ? "op-cmd-dpdk-pkt-io=${var.bootstrap.op_cmd_dpdk_pkt_io}" : null,
     var.bootstrap.plugin_op_commands != null ? "plugin-op-commands=${var.bootstrap.plugin_op_commands}" : null,
@@ -116,9 +118,7 @@ locals {
     var.bootstrap.dhcp_accept_server_hostname != null ? "dhcp-accept-server-hostname=${var.bootstrap.dhcp_accept_server_hostname}" : null,
     var.bootstrap.dhcp_accept_server_domain != null ? "dhcp-accept-server-domain=${var.bootstrap.dhcp_accept_server_domain}" : null,
     var.bootstrap.registration_pin_id != null ? "vm-series-auto-registration-pin-id=${var.bootstrap.registration_pin_id}" : null,
-    var.bootstrap_registration_pin_value != null ? "vm-series-auto-registration-pin-value=${var.bootstrap_registration_pin_value}" : null,
-    var.bootstrap_auth_key != null ? "auth-key=${var.bootstrap_auth_key}" : null,
-    var.bootstrap_vm_auth_key != null ? "vm-auth-key=${var.bootstrap_vm_auth_key}" : null
+    var.bootstrap_registration_pin_value != null ? "vm-series-auto-registration-pin-value=${var.bootstrap_registration_pin_value}" : null
   ])
 
   init_cfg_additional_lines = [

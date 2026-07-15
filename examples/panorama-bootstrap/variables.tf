@@ -10,6 +10,16 @@ variable "vsphere_allow_unverified_ssl" {
 }
 
 variable "name" { type = string }
+variable "bootstrap_hostname" {
+  description = "Optional PAN-OS hostname override when the vSphere VM name must use a distinct datastore path."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.bootstrap_hostname == null ? true : length(trimspace(var.bootstrap_hostname)) > 0
+    error_message = "bootstrap_hostname must not be empty when set."
+  }
+}
 variable "datacenter" { type = string }
 variable "cluster_name" {
   type    = string

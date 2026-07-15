@@ -3,14 +3,22 @@ variable "name" {
   type        = string
 
   validation {
-    condition     = length(trimspace(var.name)) > 0
-    error_message = "name must not be empty."
+    condition = (
+      length(trimspace(var.name)) > 0 &&
+      !can(regex("[/\\r\\n]", var.name))
+    )
+    error_message = "name must not be empty or contain /, carriage returns, or newlines."
   }
 }
 
 variable "datacenter" {
   description = "vSphere datacenter name."
   type        = string
+
+  validation {
+    condition     = length(trimspace(var.datacenter)) > 0 && !can(regex("[\\r\\n]", var.datacenter))
+    error_message = "datacenter must not be empty or contain line breaks."
+  }
 }
 
 variable "cluster_name" {
@@ -49,6 +57,14 @@ variable "host_system_id" {
 variable "datastore_name" {
   description = "Datastore for the VM configuration and disks."
   type        = string
+
+  validation {
+    condition = (
+      length(trimspace(var.datastore_name)) > 0 &&
+      !can(regex("[/\\r\\n]", var.datastore_name))
+    )
+    error_message = "datastore_name must not be empty or contain / or line breaks."
+  }
 }
 
 variable "resource_pool_name" {
@@ -77,6 +93,11 @@ variable "folder" {
   description = "Optional vSphere VM folder path."
   type        = string
   default     = null
+
+  validation {
+    condition     = var.folder == null ? true : length(trimspace(var.folder)) > 0 && !can(regex("[\\r\\n]", var.folder))
+    error_message = "folder must not be empty or contain line breaks when set."
+  }
 }
 
 variable "ova" {
@@ -134,8 +155,11 @@ variable "ova" {
   }
 
   validation {
-    condition     = try(var.ova.source_image_clone_timeout, null) == null ? true : var.ova.source_image_clone_timeout > 0
-    error_message = "ova.source_image_clone_timeout must be greater than 0 when set."
+    condition = try(var.ova.source_image_clone_timeout, null) == null ? true : (
+      var.ova.source_image_clone_timeout > 0 &&
+      floor(var.ova.source_image_clone_timeout) == var.ova.source_image_clone_timeout
+    )
+    error_message = "ova.source_image_clone_timeout must be a positive whole number of minutes when set."
   }
 
   validation {
@@ -149,18 +173,37 @@ variable "ova" {
   }
 
   validation {
+    condition = (
+      try(var.ova.source_image_clone_type, "vcenter") != "esxi" ||
+      try(var.ova.source_image_name, null) != null ||
+      try(var.ova.source_image_uuid, null) != null
+    )
+    error_message = "ova.source_image_clone_type can be esxi only when source_image_name or source_image_uuid selects a golden image."
+  }
+
+  validation {
     condition     = try(var.ova.source_image_clone_type, "vcenter") != "esxi" || !try(var.ova.source_image_linked_clone, false)
     error_message = "ova.source_image_linked_clone is only supported with ova.source_image_clone_type set to vcenter."
   }
 
   validation {
-    condition = alltrue([
-      for path in [
-        try(var.ova.source_image_vmdk_path, null),
-        try(var.ova.source_image_disk_datastore_path, null)
-      ] : path == null ? true : length(trimspace(path)) > 0
-    ])
-    error_message = "ESXi source image VMDK paths must be non-empty when set."
+    condition = try(var.ova.source_image_vmdk_path, null) == null ? true : (
+      startswith(var.ova.source_image_vmdk_path, "/vmfs/volumes/") &&
+      endswith(lower(var.ova.source_image_vmdk_path), ".vmdk") &&
+      !can(regex("[\\r\\n]", var.ova.source_image_vmdk_path)) &&
+      !can(regex("(^|/)\\.\\.?(/|$)", var.ova.source_image_vmdk_path))
+    )
+    error_message = "ova.source_image_vmdk_path must be an absolute .vmdk descriptor path under /vmfs/volumes without line breaks or dot path segments."
+  }
+
+  validation {
+    condition = try(var.ova.source_image_disk_datastore_path, null) == null ? true : (
+      !startswith(var.ova.source_image_disk_datastore_path, "/") &&
+      endswith(lower(var.ova.source_image_disk_datastore_path), ".vmdk") &&
+      !can(regex("[\\r\\n]", var.ova.source_image_disk_datastore_path)) &&
+      !can(regex("(^|/)\\.\\.?(/|$)", var.ova.source_image_disk_datastore_path))
+    )
+    error_message = "ova.source_image_disk_datastore_path must be a relative .vmdk path without line breaks or dot path segments."
   }
 
   validation {
@@ -171,9 +214,11 @@ variable "ova" {
   validation {
     condition = (
       try(var.ova.source_image_scsi_controller_scan_count, 1) >= 1 &&
-      try(var.ova.source_image_nvme_controller_scan_count, 1) >= 1
+      floor(try(var.ova.source_image_scsi_controller_scan_count, 1)) == try(var.ova.source_image_scsi_controller_scan_count, 1) &&
+      try(var.ova.source_image_nvme_controller_scan_count, 1) >= 1 &&
+      floor(try(var.ova.source_image_nvme_controller_scan_count, 1)) == try(var.ova.source_image_nvme_controller_scan_count, 1)
     )
-    error_message = "source image controller scan counts must be greater than or equal to 1."
+    error_message = "source image controller scan counts must be positive whole numbers."
   }
 }
 
@@ -204,6 +249,11 @@ variable "esxi_ssh_password" {
   type        = string
   default     = null
   sensitive   = true
+
+  validation {
+    condition     = nonsensitive(var.esxi_ssh_password == null ? true : length(var.esxi_ssh_password) > 0 && !can(regex("[\\r\\n]", var.esxi_ssh_password)))
+    error_message = "esxi_ssh_password must not be empty or contain line breaks when set."
+  }
 }
 
 variable "esxi_ssh_private_key" {
@@ -211,6 +261,11 @@ variable "esxi_ssh_private_key" {
   type        = string
   default     = null
   sensitive   = true
+
+  validation {
+    condition     = nonsensitive(var.esxi_ssh_private_key == null ? true : length(trimspace(var.esxi_ssh_private_key)) > 0)
+    error_message = "esxi_ssh_private_key must not be empty when set."
+  }
 }
 
 variable "esxi_ssh_port" {
@@ -230,8 +285,11 @@ variable "esxi_ssh_timeout" {
   default     = "10m"
 
   validation {
-    condition     = length(trimspace(var.esxi_ssh_timeout)) > 0
-    error_message = "esxi_ssh_timeout must not be empty."
+    condition = (
+      can(regex("^([0-9]+(ms|s|m|h))+$", trimspace(var.esxi_ssh_timeout))) &&
+      can(regex("[1-9]", trimspace(var.esxi_ssh_timeout)))
+    )
+    error_message = "esxi_ssh_timeout must be a positive duration such as 30s, 10m, or 1h30m."
   }
 }
 
@@ -309,24 +367,44 @@ variable "num_cpus" {
   description = "Optional CPU override. If null, the OVA default is used."
   type        = number
   default     = null
+
+  validation {
+    condition     = var.num_cpus == null ? true : var.num_cpus > 0 && floor(var.num_cpus) == var.num_cpus
+    error_message = "num_cpus must be a positive whole number when set."
+  }
 }
 
 variable "num_cores_per_socket" {
   description = "Optional cores-per-socket override."
   type        = number
   default     = null
+
+  validation {
+    condition     = var.num_cores_per_socket == null ? true : var.num_cores_per_socket > 0 && floor(var.num_cores_per_socket) == var.num_cores_per_socket
+    error_message = "num_cores_per_socket must be a positive whole number when set."
+  }
 }
 
 variable "memory_mb" {
   description = "Optional memory override in MB. If null, the OVA default is used."
   type        = number
   default     = null
+
+  validation {
+    condition     = var.memory_mb == null ? true : var.memory_mb > 0 && floor(var.memory_mb) == var.memory_mb
+    error_message = "memory_mb must be a positive whole number when set."
+  }
 }
 
 variable "hardware_version" {
   description = "Optional VM virtual hardware version override. If null, standalone ESXi source-image deployments inherit the source image hardware version when available."
   type        = number
   default     = null
+
+  validation {
+    condition     = var.hardware_version == null ? true : var.hardware_version > 0 && floor(var.hardware_version) == var.hardware_version
+    error_message = "hardware_version must be a positive whole number when set."
+  }
 }
 
 variable "firmware" {
@@ -375,6 +453,11 @@ variable "storage_policy_id" {
   description = "Optional VM storage policy ID to apply to the VM."
   type        = string
   default     = null
+
+  validation {
+    condition     = var.storage_policy_id == null ? true : length(trimspace(var.storage_policy_id)) > 0 && !can(regex("[\\r\\n]", var.storage_policy_id))
+    error_message = "storage_policy_id must not be empty or contain line breaks when set."
+  }
 }
 
 variable "cpu_hot_add_enabled" {
@@ -393,12 +476,22 @@ variable "wait_for_guest_ip_timeout" {
   description = "Timeout in minutes to wait for a guest IP. VM-Series does not normally report this reliably before bootstrap, so the default is 0."
   type        = number
   default     = 0
+
+  validation {
+    condition     = var.wait_for_guest_ip_timeout >= 0 && floor(var.wait_for_guest_ip_timeout) == var.wait_for_guest_ip_timeout
+    error_message = "wait_for_guest_ip_timeout must be a non-negative whole number of minutes."
+  }
 }
 
 variable "wait_for_guest_net_timeout" {
   description = "Timeout in minutes to wait for guest networking. VM-Series does not normally report this reliably before bootstrap, so the default is 0."
   type        = number
   default     = 0
+
+  validation {
+    condition     = var.wait_for_guest_net_timeout >= 0 && floor(var.wait_for_guest_net_timeout) == var.wait_for_guest_net_timeout
+    error_message = "wait_for_guest_net_timeout must be a non-negative whole number of minutes."
+  }
 }
 
 variable "wait_for_guest_net_routable" {
@@ -411,12 +504,22 @@ variable "poweron_timeout" {
   description = "Timeout in seconds to wait for the VM to power on."
   type        = number
   default     = 300
+
+  validation {
+    condition     = var.poweron_timeout > 0 && floor(var.poweron_timeout) == var.poweron_timeout
+    error_message = "poweron_timeout must be a positive whole number of seconds."
+  }
 }
 
 variable "shutdown_wait_timeout" {
   description = "Timeout in minutes to wait for a graceful guest shutdown before powering off."
   type        = number
   default     = 3
+
+  validation {
+    condition     = var.shutdown_wait_timeout >= 0 && floor(var.shutdown_wait_timeout) == var.shutdown_wait_timeout
+    error_message = "shutdown_wait_timeout must be a non-negative whole number of minutes."
+  }
 }
 
 variable "force_power_off" {
@@ -502,6 +605,105 @@ variable "bootstrap" {
     )
     error_message = "When attaching a pre-existing datastore ISO, set bootstrap.datastore_path."
   }
+
+  validation {
+    condition = alltrue([
+      for value in [
+        var.bootstrap.work_dir,
+        var.bootstrap.local_iso_path,
+        var.bootstrap.datastore_name,
+        var.bootstrap.ip_address,
+        var.bootstrap.default_gateway,
+        var.bootstrap.netmask,
+        var.bootstrap.ipv6_address,
+        var.bootstrap.ipv6_default_gateway,
+        var.bootstrap.hostname,
+        var.bootstrap.panorama_server,
+        var.bootstrap.panorama_server_2,
+        var.bootstrap.template_stack,
+        var.bootstrap.device_group,
+        var.bootstrap.dns_primary,
+        var.bootstrap.dns_secondary,
+        var.bootstrap.op_command_modes,
+        var.bootstrap.op_cmd_dpdk_pkt_io,
+        var.bootstrap.plugin_op_commands,
+        var.bootstrap.dhcp_send_hostname,
+        var.bootstrap.dhcp_send_client_id,
+        var.bootstrap.dhcp_accept_server_hostname,
+        var.bootstrap.dhcp_accept_server_domain,
+        var.bootstrap.registration_pin_id
+      ] : value == null ? true : length(trimspace(value)) > 0 && !can(regex("[\\r\\n]", value))
+    ])
+    error_message = "Bootstrap string values must not be empty or contain line breaks when set."
+  }
+
+  validation {
+    condition = var.bootstrap.datastore_path == null ? true : (
+      length(trimspace(var.bootstrap.datastore_path)) > 0 &&
+      !startswith(var.bootstrap.datastore_path, "/") &&
+      !can(regex("[\\r\\n]", var.bootstrap.datastore_path)) &&
+      !can(regex("(^|/)\\.\\.?(/|$)", var.bootstrap.datastore_path))
+    )
+    error_message = "bootstrap.datastore_path must be a non-empty datastore-relative path without line breaks or dot path segments."
+  }
+
+  validation {
+    condition = alltrue([
+      for key, value in var.bootstrap.additional_parameters :
+      can(regex("^[A-Za-z0-9][A-Za-z0-9._-]*$", key)) &&
+      (value == null ? true : !can(regex("[\\r\\n]", value)))
+    ])
+    error_message = "bootstrap.additional_parameters keys must contain only letters, numbers, dots, underscores, or hyphens, and values must be single-line strings."
+  }
+
+  validation {
+    condition = alltrue([
+      for key in keys(var.bootstrap.additional_parameters) : !contains([
+        "type",
+        "ip-address",
+        "default-gateway",
+        "netmask",
+        "ipv6-address",
+        "ipv6-default-gateway",
+        "hostname",
+        "panorama-server",
+        "panorama-server-2",
+        "tplname",
+        "dgname",
+        "dns-primary",
+        "dns-secondary",
+        "auth-key",
+        "vm-auth-key",
+        "op-command-modes",
+        "op-cmd-dpdk-pkt-io",
+        "plugin-op-commands",
+        "dhcp-send-hostname",
+        "dhcp-send-client-id",
+        "dhcp-accept-server-hostname",
+        "dhcp-accept-server-domain",
+        "vm-series-auto-registration-pin-id",
+        "vm-series-auto-registration-pin-value"
+      ], lower(key))
+    ])
+    error_message = "bootstrap.additional_parameters must not redefine a bootstrap key modeled by this module."
+  }
+
+  validation {
+    condition = alltrue([
+      for value in [
+        var.bootstrap.dhcp_send_hostname,
+        var.bootstrap.dhcp_send_client_id,
+        var.bootstrap.dhcp_accept_server_hostname,
+        var.bootstrap.dhcp_accept_server_domain
+      ] : value == null ? true : contains(["yes", "no"], value)
+    ])
+    error_message = "Bootstrap DHCP boolean settings must be yes or no when set."
+  }
+
+  validation {
+    condition     = var.bootstrap.op_cmd_dpdk_pkt_io == null ? true : contains(["on", "off"], var.bootstrap.op_cmd_dpdk_pkt_io)
+    error_message = "bootstrap.op_cmd_dpdk_pkt_io must be on or off when set."
+  }
 }
 
 variable "bootstrap_vapp_options" {
@@ -509,6 +711,11 @@ variable "bootstrap_vapp_options" {
   type        = string
   default     = null
   sensitive   = true
+
+  validation {
+    condition     = nonsensitive(var.bootstrap_vapp_options == null ? true : length(trimspace(var.bootstrap_vapp_options)) > 0 && !can(regex("[\\r\\n]", var.bootstrap_vapp_options)))
+    error_message = "bootstrap_vapp_options must not be empty or contain line breaks when set."
+  }
 }
 
 variable "bootstrap_vm_auth_key" {
@@ -516,6 +723,11 @@ variable "bootstrap_vm_auth_key" {
   type        = string
   default     = null
   sensitive   = true
+
+  validation {
+    condition     = nonsensitive(var.bootstrap_vm_auth_key == null ? true : length(trimspace(var.bootstrap_vm_auth_key)) > 0 && !can(regex("[\\r\\n]", var.bootstrap_vm_auth_key)))
+    error_message = "bootstrap_vm_auth_key must not be empty or contain line breaks when set."
+  }
 }
 
 variable "bootstrap_auth_key" {
@@ -523,6 +735,11 @@ variable "bootstrap_auth_key" {
   type        = string
   default     = null
   sensitive   = true
+
+  validation {
+    condition     = nonsensitive(var.bootstrap_auth_key == null ? true : length(trimspace(var.bootstrap_auth_key)) > 0 && !can(regex("[\\r\\n]", var.bootstrap_auth_key)))
+    error_message = "bootstrap_auth_key must not be empty or contain line breaks when set."
+  }
 }
 
 variable "bootstrap_registration_pin_value" {
@@ -530,6 +747,11 @@ variable "bootstrap_registration_pin_value" {
   type        = string
   default     = null
   sensitive   = true
+
+  validation {
+    condition     = nonsensitive(var.bootstrap_registration_pin_value == null ? true : length(trimspace(var.bootstrap_registration_pin_value)) > 0 && !can(regex("[\\r\\n]", var.bootstrap_registration_pin_value)))
+    error_message = "bootstrap_registration_pin_value must not be empty or contain line breaks when set."
+  }
 }
 
 variable "bootstrap_license_authcodes" {
@@ -537,6 +759,11 @@ variable "bootstrap_license_authcodes" {
   type        = string
   default     = null
   sensitive   = true
+
+  validation {
+    condition     = nonsensitive(var.bootstrap_license_authcodes == null ? true : length(trimspace(var.bootstrap_license_authcodes)) > 0)
+    error_message = "bootstrap_license_authcodes must not be empty when set."
+  }
 }
 
 variable "bootstrap_files" {
@@ -590,4 +817,9 @@ variable "bootstrap_xml" {
   type        = string
   default     = null
   sensitive   = true
+
+  validation {
+    condition     = nonsensitive(var.bootstrap_xml == null ? true : length(trimspace(var.bootstrap_xml)) > 0)
+    error_message = "bootstrap_xml must not be empty when set."
+  }
 }

@@ -123,6 +123,14 @@ resource "vsphere_virtual_machine" "this" {
       condition     = !local.clone_with_esxi || var.esxi_ssh_host != null
       error_message = "Set esxi_ssh_host when ova.source_image_clone_type is esxi."
     }
+
+    precondition {
+      condition = var.num_cores_per_socket == null ? true : (
+        coalesce(var.num_cpus, local.image_num_cpus) >= var.num_cores_per_socket &&
+        coalesce(var.num_cpus, local.image_num_cpus) % var.num_cores_per_socket == 0
+      )
+      error_message = "num_cores_per_socket must not exceed the VM CPU count and must divide it evenly."
+    }
   }
 
   depends_on = [terraform_data.esxi_disk_clone, vsphere_file.bootstrap_iso]

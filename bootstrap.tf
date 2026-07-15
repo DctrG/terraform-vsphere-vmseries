@@ -5,9 +5,13 @@ resource "terraform_data" "bootstrap_dirs" {
 
   provisioner "local-exec" {
     interpreter = ["/bin/sh", "-c"]
-    command     = <<-EOT
+    environment = {
+      BOOTSTRAP_DIR = local.bootstrap_dir
+    }
+    command = <<-EOT
       set -eu
-      mkdir -p '${local.bootstrap_dir}/config' '${local.bootstrap_dir}/license' '${local.bootstrap_dir}/software' '${local.bootstrap_dir}/content' '${local.bootstrap_dir}/plugins'
+      umask 077
+      mkdir -p "$BOOTSTRAP_DIR/config" "$BOOTSTRAP_DIR/license" "$BOOTSTRAP_DIR/software" "$BOOTSTRAP_DIR/content" "$BOOTSTRAP_DIR/plugins"
     EOT
   }
 }
@@ -64,33 +68,42 @@ resource "terraform_data" "bootstrap_iso" {
   triggers_replace = [
     local.bootstrap_dir,
     local.bootstrap_iso_local_path,
-    nonsensitive(sha256(local.init_cfg_content)),
-    nonsensitive(sha256(var.bootstrap_license_authcodes == null ? "" : var.bootstrap_license_authcodes)),
-    nonsensitive(sha256(var.bootstrap_xml == null ? "" : var.bootstrap_xml)),
+    sha256(local.init_cfg_content),
+    sha256(var.bootstrap_license_authcodes == null ? "" : var.bootstrap_license_authcodes),
+    sha256(var.bootstrap_xml == null ? "" : var.bootstrap_xml),
     local.bootstrap_files_fingerprint
   ]
 
   provisioner "local-exec" {
     interpreter = ["/bin/sh", "-c"]
-    command     = <<-EOT
+    environment = {
+      SRC = local.bootstrap_dir
+      ISO = local.bootstrap_iso_local_path
+    }
+    command = <<-EOT
       set -eu
-      SRC='${local.bootstrap_dir}'
-      ISO='${local.bootstrap_iso_local_path}'
+      umask 077
       mkdir -p "$(dirname "$ISO")"
+      mkdir -p "$SRC/config" "$SRC/license" "$SRC/software" "$SRC/content" "$SRC/plugins"
       rm -f "$ISO"
+      TMP_ISO_DIR="$(mktemp -d "$${TMPDIR:-/tmp}/vmseries-bootstrap-iso.XXXXXX")"
+      TMP_ISO="$TMP_ISO_DIR/bootstrap.iso"
+      trap 'rm -rf "$TMP_ISO_DIR"' 0
 
       if command -v genisoimage >/dev/null 2>&1; then
-        genisoimage -quiet -J -R -V bootstrap -o "$ISO" "$SRC"
+        genisoimage -quiet -J -R -V bootstrap -o "$TMP_ISO" "$SRC"
       elif command -v mkisofs >/dev/null 2>&1; then
-        mkisofs -quiet -J -R -V bootstrap -o "$ISO" "$SRC"
+        mkisofs -quiet -J -R -V bootstrap -o "$TMP_ISO" "$SRC"
       elif command -v xorrisofs >/dev/null 2>&1; then
-        xorrisofs -quiet -J -R -V bootstrap -o "$ISO" "$SRC"
+        xorrisofs -quiet -J -R -V bootstrap -o "$TMP_ISO" "$SRC"
       elif command -v hdiutil >/dev/null 2>&1; then
-        hdiutil makehybrid -iso -joliet -default-volume-name bootstrap -o "$ISO" "$SRC" >/dev/null
+        hdiutil makehybrid -iso -joliet -default-volume-name bootstrap -o "$TMP_ISO" "$SRC" >/dev/null
       else
         echo "No ISO builder found. Install genisoimage, mkisofs, xorrisofs, or use macOS hdiutil." >&2
         exit 1
       fi
+
+      mv "$TMP_ISO" "$ISO"
     EOT
   }
 

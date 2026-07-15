@@ -1,0 +1,84 @@
+name: Terraform
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
+jobs:
+  minimum-version:
+    name: Terraform 1.5 compatibility
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: 1.5.7
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive
+
+      - name: Initialize module
+        run: terraform init -backend=false
+
+      - name: Validate module
+        run: terraform validate
+
+  test:
+    name: Terraform tests and examples
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: 1.15.8
+
+      - name: Install TFLint
+        uses: terraform-linters/setup-tflint@6e1e0642c0289bd619021bf6b34e3c08ed1e005a # v6.3.0
+        with:
+          tflint_version: v0.63.1
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive
+
+      - name: Lint Terraform
+        run: tflint --recursive
+
+      - name: Initialize module
+        run: terraform init -backend=false
+
+      - name: Validate module
+        run: terraform validate
+
+      - name: Run tests
+        run: terraform test
+
+      - name: Initialize basic example
+        run: terraform -chdir=examples/basic-ova init -backend=false
+
+      - name: Validate basic example
+        run: terraform -chdir=examples/basic-ova validate
+
+      - name: Initialize Panorama example
+        run: terraform -chdir=examples/panorama-bootstrap init -backend=false
+
+      - name: Validate Panorama example
+        run: terraform -chdir=examples/panorama-bootstrap validate

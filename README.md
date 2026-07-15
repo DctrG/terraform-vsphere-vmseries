@@ -1,5 +1,7 @@
 # terraform-vsphere-vmseries
 
+[![Terraform](https://github.com/DctrG/terraform-vsphere-vmseries/actions/workflows/terraform.yml/badge.svg)](https://github.com/DctrG/terraform-vsphere-vmseries/actions/workflows/terraform.yml)
+
 Terraform module for deploying a Palo Alto Networks VM-Series firewall OVA into VMware vSphere / VMware private cloud.
 
 This module is intentionally focused on the infrastructure side of a private-cloud VM-Series deployment:
@@ -30,6 +32,8 @@ Panorama / PAN-OS policy, templates, device groups, CSP licensing inventory, and
 | terraform | >= 1.5.0 |
 | vmware/vsphere | >= 2.14, < 2.16 |
 | hashicorp/local | >= 2.4, < 3.0 |
+
+CI validates the module contract with Terraform 1.5.7 and runs the complete mock-provider test suite and example validation with Terraform 1.15.8. The standalone ESXi and Panorama Software Firewall License plugin paths have also been exercised against real infrastructure; environment-specific compatibility still depends on the selected PAN-OS image, vSphere release, and provider behavior.
 
 For bootstrap ISO creation, the Terraform runner must have one of these installed:
 
@@ -202,6 +206,8 @@ module "vmseries" {
 
 By default, the per-VM disk copy is written to `<name>-disk/<name>.vmdk` on `datastore_name`. Override `ova.source_image_disk_datastore_path` when your datastore layout requires a different path. Do not point that destination at the golden image VMDK.
 
+The standalone ESXi clone path is intentionally immutable: the module refuses to overwrite an existing destination VMDK. When replacing a firewall or changing its source image, use a new VM name or a new `ova.source_image_disk_datastore_path`, review the plan, and remove superseded storage only after the replacement is healthy. This protects an attached firewall disk from being deleted during an in-place clone update.
+
 In standalone ESXi source-image mode, the VM inherits the source image hardware version when the provider can read it. Set `num_cores_per_socket` when your golden image expects a specific CPU topology.
 
 ## Panorama Bootstrap
@@ -258,6 +264,8 @@ module "vmseries" {
 For Software Firewall License plugin workflows, use the Panorama-generated bootstrap `auth-key` for `bootstrap_auth_key`. Set `bootstrap.panorama_server` to the Panorama address reachable from the firewall management interface. If Panorama is behind NAT, this is typically the public address or DNS name, even if `request plugins sw_fw_license bootstrap-parameters` prints Panorama's private address. The module renders those values into `/config/init-cfg.txt`; with `plugin-op-commands=panorama-licensing-mode-on`, the firewall enters Panorama licensing mode during bootstrap. License assignment, serial registration, and Panorama commits are performed by Panorama and the plugin, not by this module.
 
 `bootstrap_vm_auth_key` is still available for workflows that explicitly require `vm-auth-key`. Do not mix `auth-key`, `vm-auth-key`, registration PIN values, or license auth codes unless the Panorama/plugin bootstrap output for your workflow includes those fields; they render to different keys and trigger different bootstrap paths.
+
+If Panorama licensing remains associated with a stale hypervisor identity, recreating a VM at the same standalone ESXi datastore path may reproduce that identity. Deploy the replacement under a fresh vSphere VM/datastore name and keep the intended Panorama-facing name in `bootstrap.hostname`. Verify the replacement is licensed and connected before removing the old VM.
 
 Software Firewall License plugin onboarding may take a few minutes after the VM first becomes reachable. The firewall can briefly show `serial: unknown` and `Connected: no` before the license is installed, the management plane restarts, and Panorama accepts the connection. If the firewall stays in Panorama licensing mode with `vm-license: none`, troubleshoot the Panorama/plugin workflow first: confirm the auth key, device group, template stack, and plugin op command match `request plugins sw_fw_license bootstrap-parameters`; confirm the rendered `panorama-server` is the public or otherwise reachable address from the firewall; and confirm the plugin can assign capacity. After the firewall auto-registers, Panorama may place the serial number into candidate configuration for the requested device group and template stack. Commit Panorama so the new serial is present in running configuration, then push policy/templates with the workflow your environment uses.
 
@@ -363,6 +371,8 @@ Use `vapp_properties` for image-specific OVF properties that are not modeled by 
 
 Sensitive values such as `esxi_ssh_password`, `esxi_ssh_private_key`, `bootstrap_auth_key`, `bootstrap_vm_auth_key`, `bootstrap_registration_pin_value`, `bootstrap_license_authcodes`, `bootstrap_files`, `bootstrap_vapp_options`, `vapp_properties`, and `bootstrap_xml` are marked sensitive, but they are still used by the Terraform runner and can be written to the local bootstrap work directory, vSphere VM configuration, or Terraform state depending on the selected path. Use a secure runner and encrypted remote state.
 
+See [SECURITY.md](SECURITY.md) for the disclosure process and sensitive-data guidance.
+
 ## Non-goals
 
 This module does not:
@@ -382,3 +392,7 @@ For production, prefer a two-stage pipeline:
 2. Security pipeline: use Panorama / PAN-OS automation to assign the device to policy, templates, licensing, content updates, and commits.
 
 This keeps vSphere lifecycle and firewall policy lifecycle separated.
+
+## Contributing and releases
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development checks and [RELEASING.md](RELEASING.md) for the semantic-version and Terraform Registry release checklist.

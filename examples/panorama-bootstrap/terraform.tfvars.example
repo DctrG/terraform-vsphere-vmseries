@@ -3,6 +3,9 @@ vsphere_user   = "administrator@vsphere.local"
 vsphere_password = "CHANGE_ME"
 
 name           = "pa-vmseries-01"
+# When replacing a stale VM identity, give name a fresh vSphere/datastore name
+# and preserve the Panorama-facing PAN-OS name with this optional override.
+# bootstrap_hostname = "pa-vmseries-01"
 datacenter     = "DC1"
 cluster_name   = "Cluster01"
 host_name      = "esxi-01.example.local"
@@ -72,8 +75,11 @@ device_group    = "DG-VMWARE"
 bootstrap_auth_key           = "CHANGE_ME"
 bootstrap_plugin_op_commands = "panorama-licensing-mode-on"
 
-# Optional: set only when your workflow explicitly returns/requires these keys.
-# bootstrap_vm_auth_key            = "CHANGE_ME"
+# Do not set bootstrap_vm_auth_key for the Software Firewall License plugin
+# workflow; Panorama's generated bootstrap_auth_key replaces it.
+# bootstrap_vm_auth_key = "CHANGE_ME"
+
+# Optional: set only when a different workflow explicitly returns these values.
 # bootstrap_registration_pin_id    = "CHANGE_ME"
 # bootstrap_registration_pin_value = "CHANGE_ME"
 # bootstrap_license_authcodes      = "AUTHCODE1\nAUTHCODE2\n"

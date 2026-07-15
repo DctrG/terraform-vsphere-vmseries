@@ -29,8 +29,11 @@ resource "terraform_data" "esxi_disk_clone" {
       "set -eu",
       "mkdir -p ${local.esxi_disk_vmfs_dir_shell}",
       "test -f ${local.esxi_source_vmdk_shell}",
-      "if [ -f ${local.esxi_disk_vmfs_path_shell} ]; then vmkfstools -U ${local.esxi_disk_vmfs_path_shell}; fi",
-      "vmkfstools -i ${local.esxi_source_vmdk_shell} ${local.esxi_disk_vmfs_path_shell} -d ${local.esxi_disk_clone_type_shell}"
+      "if [ -e ${local.esxi_disk_vmfs_path_shell} ]; then echo 'Destination VMDK already exists; use a new VM name or ova.source_image_disk_datastore_path.' >&2; exit 1; fi",
+      "cleanup_partial_clone() { status=$?; trap - 0; if [ \"$status\" -ne 0 ] && [ -e ${local.esxi_disk_vmfs_path_shell} ]; then vmkfstools -U ${local.esxi_disk_vmfs_path_shell} >/dev/null 2>&1 || true; fi; exit \"$status\"; }",
+      "trap cleanup_partial_clone 0",
+      "vmkfstools -i ${local.esxi_source_vmdk_shell} ${local.esxi_disk_vmfs_path_shell} -d ${local.esxi_disk_clone_type_shell}",
+      "trap - 0"
     ]
   }
 
@@ -43,6 +46,11 @@ resource "terraform_data" "esxi_disk_clone" {
     precondition {
       condition     = nonsensitive(var.esxi_ssh_password != null || var.esxi_ssh_private_key != null)
       error_message = "Set esxi_ssh_password or esxi_ssh_private_key when ova.source_image_clone_type is esxi."
+    }
+
+    precondition {
+      condition     = var.ova.source_image_vmdk_path != local.esxi_disk_vmfs_path
+      error_message = "The standalone ESXi destination VMDK must differ from the golden image source VMDK."
     }
   }
 }

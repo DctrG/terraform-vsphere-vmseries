@@ -160,6 +160,11 @@ run "bootstrap_plan" {
   }
 
   assert {
+    condition     = index(nonsensitive(local.init_cfg_ordered_lines), "auth-key=mock-plugin-auth-key") < index(nonsensitive(local.init_cfg_ordered_lines), "plugin-op-commands=panorama-licensing-mode-on")
+    error_message = "The plugin auth key must precede its bootstrap operation command."
+  }
+
+  assert {
     condition     = length(local_sensitive_file.bootstrap_files) == 2
     error_message = "The module should render caller-supplied bootstrap_files into the bootstrap ISO work directory."
   }
@@ -357,4 +362,114 @@ run "host_system_id_plan" {
     condition     = vsphere_virtual_machine.this.host_system_id == "host-123"
     error_message = "The VM should use the caller-supplied host managed object ID when host_system_id is set."
   }
+}
+
+run "reject_invalid_vm_name" {
+  command = plan
+
+  variables {
+    name = "folder/pa-vmseries"
+  }
+
+  expect_failures = [var.name]
+}
+
+run "reject_invalid_cpu_count" {
+  command = plan
+
+  variables {
+    name     = "pa-vmseries-invalid-cpu"
+    num_cpus = 0
+  }
+
+  expect_failures = [var.num_cpus]
+}
+
+run "reject_invalid_cpu_topology" {
+  command = plan
+
+  variables {
+    name                 = "pa-vmseries-invalid-cpu-topology"
+    num_cpus             = 2
+    num_cores_per_socket = 3
+  }
+
+  expect_failures = [vsphere_virtual_machine.this]
+}
+
+run "reject_esxi_datastore_traversal" {
+  command = plan
+
+  variables {
+    name             = "pa-vmseries-invalid-esxi-path"
+    cluster_name     = null
+    resource_pool_id = "resource-pool-standalone"
+    datastore_name   = "datastore1"
+
+    ova = {
+      source_image_name                = "PA-VM-Series-Golden"
+      source_image_clone_type          = "esxi"
+      source_image_vmdk_path           = "/vmfs/volumes/datastore1/PA-VM-Series-Golden/PA-VM-Series-Golden.vmdk"
+      source_image_disk_datastore_path = "../outside-datastore.vmdk"
+    }
+
+    esxi_ssh_host     = "esxi-01.example.local"
+    esxi_ssh_password = "mock-password"
+  }
+
+  expect_failures = [var.ova]
+}
+
+run "reject_esxi_source_overwrite" {
+  command = plan
+
+  variables {
+    name             = "pa-vmseries-source-overwrite"
+    cluster_name     = null
+    resource_pool_id = "resource-pool-standalone"
+    datastore_name   = "datastore1"
+
+    ova = {
+      source_image_name                = "PA-VM-Series-Golden"
+      source_image_clone_type          = "esxi"
+      source_image_vmdk_path           = "/vmfs/volumes/datastore1/PA-VM-Series-Golden/PA-VM-Series-Golden.vmdk"
+      source_image_disk_datastore_path = "PA-VM-Series-Golden/PA-VM-Series-Golden.vmdk"
+    }
+
+    esxi_ssh_host     = "esxi-01.example.local"
+    esxi_ssh_password = "mock-password"
+  }
+
+  expect_failures = [terraform_data.esxi_disk_clone]
+}
+
+run "reject_modeled_bootstrap_parameter_override" {
+  command = plan
+
+  variables {
+    name = "pa-vmseries-invalid-bootstrap-override"
+
+    bootstrap = {
+      enabled         = true
+      create_iso      = false
+      attach_iso      = false
+      management_type = "dhcp-client"
+      additional_parameters = {
+        hostname = "duplicate-hostname"
+      }
+    }
+  }
+
+  expect_failures = [var.bootstrap]
+}
+
+run "reject_multiline_bootstrap_auth_key" {
+  command = plan
+
+  variables {
+    name               = "pa-vmseries-invalid-auth-key"
+    bootstrap_auth_key = "first-line\nsecond-line"
+  }
+
+  expect_failures = [var.bootstrap_auth_key]
 }
